@@ -13,7 +13,7 @@ module Ping
       end
 
       s = @settings
-      win = UIng::Window.new("Preferences", 380, 340, margined: true)
+      win = UIng::Window.new("Preferences", 420, 400, margined: true)
       @window = win
 
       form = UIng::Form.new(padded: true)
@@ -22,6 +22,10 @@ module Ping
       warn_spinbox.value = s.warn_threshold
       alert_spinbox = UIng::Spinbox.new(1, 20)
       alert_spinbox.value = s.alert_threshold
+      notify_enabled = UIng::Checkbox.new("Enable system notifications")
+      notify_enabled.checked = s.notify_enabled
+      notify_threshold_spinbox = UIng::Spinbox.new(1, 20)
+      notify_threshold_spinbox.value = s.notify_failures_threshold
 
       ok_btn = UIng::ColorButton.new
       warn_btn = UIng::ColorButton.new
@@ -37,12 +41,14 @@ module Ping
       cr_r, cr_g, cr_b = s.color_critical
       crit_btn.set_color(cr_r, cr_g, cr_b, 1.0)
 
-      form.append("Yellow threshold (streak <=)", warn_spinbox)
-      form.append("Orange threshold (streak <=)", alert_spinbox)
-      form.append("Green (ok)", ok_btn)
-      form.append("Yellow (warn)", warn_btn)
-      form.append("Orange (alert)", alert_btn)
-      form.append("Red (critical)", crit_btn)
+      form.append("Warn threshold (failures <=)", warn_spinbox)
+      form.append("Alert threshold (failures <=)", alert_spinbox)
+      form.append("", notify_enabled)
+      form.append("Notify after failures", notify_threshold_spinbox)
+      form.append("OK color", ok_btn)
+      form.append("Warn color", warn_btn)
+      form.append("Alert color", alert_btn)
+      form.append("Critical color", crit_btn)
 
       apply_btn = UIng::Button.new("Apply")
       apply_btn.on_clicked do
@@ -60,6 +66,9 @@ module Ping
         s.color_alert = {r, g, b}
         r, g, b, _ = crit_btn.color
         s.color_critical = {r, g, b}
+        s.notify_enabled = notify_enabled.checked?
+        s.notify_failures_threshold = notify_threshold_spinbox.value
+        s.save
 
         @on_applied.call
         @window = nil

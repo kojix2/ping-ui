@@ -4,6 +4,7 @@ require "./ping/settings"
 require "./ping/history"
 require "./ping/icmp_pinger"
 require "./ping/chart_renderer"
+require "./ping/notifier"
 require "./ping/settings_window"
 require "./ping/app"
 

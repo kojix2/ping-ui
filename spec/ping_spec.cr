@@ -68,5 +68,4 @@ describe Ping do
     states[3].should eq(2)
     states[4].should eq(3)
   end
-
 end

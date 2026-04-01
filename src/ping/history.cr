@@ -97,6 +97,5 @@ module Ping
       span_ms = 1_i64 if span_ms <= 0
       {first_ms, span_ms}
     end
-
   end
 end
