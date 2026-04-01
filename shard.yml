@@ -1,0 +1,17 @@
+name: ping
+version: 0.1.0
+
+authors:
+  - kojix2 <2xijok@gmail.com>
+
+targets:
+  ping:
+    main: src/ping.cr
+
+dependencies:
+  uing:
+    github: kojix2/uing
+
+crystal: '>= 1.19.1'
+
+license: MIT

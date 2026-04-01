@@ -1,0 +1,16 @@
+require "./ping/version"
+require "./ping/model"
+require "./ping/settings"
+require "./ping/history"
+require "./ping/icmp_pinger"
+require "./ping/chart_renderer"
+require "./ping/settings_window"
+require "./ping/app"
+
+module Ping
+  def self.run : Nil
+    App.new.run
+  end
+end
+
+Ping.run

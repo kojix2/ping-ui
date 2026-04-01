@@ -1,0 +1,101 @@
+require "./spec_helper"
+
+describe Ping do
+  it "tracks failure streaks and resets them on success" do
+    history = Ping::HistoryStore.new(Ping::Settings.new)
+    base = Time.utc(2026, 4, 1, 12, 0, 0)
+
+    sample1 = history.add(Ping::SampleInput.new(base, 1, "timeout 1", false, nil, :timeout))
+    sample2 = history.add(Ping::SampleInput.new(base + 1.second, 2, "timeout 2", false, nil, :timeout))
+    sample3 = history.add(Ping::SampleInput.new(base + 2.seconds, 3, "ok", true, 12.0, :success))
+
+    sample1.failure_streak.should eq(1)
+    sample2.failure_streak.should eq(2)
+    sample3.failure_streak.should eq(0)
+  end
+
+  it "fills chart columns with forward-fill from each sample to the next" do
+    history = Ping::HistoryStore.new(Ping::Settings.new)
+    base = Time.utc(2026, 4, 1, 12, 0, 0)
+
+    history.add(Ping::SampleInput.new(base + 10.seconds, 1, "ok", true, 11.0, :success))
+    history.add(Ping::SampleInput.new(base + 30.seconds, 2, "timeout", false, nil, :timeout))
+    history.add(Ping::SampleInput.new(base + 31.seconds, 3, "timeout", false, nil, :timeout))
+
+    # 1-minute window, 6 columns => 10 s/column
+    states = history.row_series(1.minute, 6, base + 1.minute).states
+
+    states.size.should eq(6)
+    states[0].should be_nil # before first ping: no data
+    states[1].should eq(0)  # success at +10 s
+    states[2].should eq(0)  # forward-filled from that success
+    states[3].should eq(1)  # failures (streak <= 2) at +30 and +31 s
+    states[4].should eq(1)  # forward-filled from those failures
+  end
+
+  it "stops filling columns after the provided stop time" do
+    history = Ping::HistoryStore.new(Ping::Settings.new)
+    base = Time.utc(2026, 4, 1, 12, 0, 0)
+
+    history.add(Ping::SampleInput.new(base + 10.seconds, 1, "ok", true, 11.0, :success))
+
+    states = history.row_series(1.minute, 6, base + 1.minute, base + 25.seconds).states
+
+    states[0].should be_nil
+    states[1].should eq(0)
+    states[2].should eq(0)
+    states[3].should be_nil
+    states[4].should be_nil
+    states[5].should be_nil
+  end
+
+  it "uses configurable thresholds for severity levels" do
+    settings = Ping::Settings.new
+    settings.warn_threshold = 1
+    settings.alert_threshold = 3
+    history = Ping::HistoryStore.new(settings)
+    base = Time.utc(2026, 4, 1, 12, 0, 0)
+
+    history.add(Ping::SampleInput.new(base + 10.seconds, 1, "timeout 1", false, nil, :timeout))
+    history.add(Ping::SampleInput.new(base + 20.seconds, 2, "timeout 2", false, nil, :timeout))
+    history.add(Ping::SampleInput.new(base + 30.seconds, 3, "timeout 3", false, nil, :timeout))
+    history.add(Ping::SampleInput.new(base + 40.seconds, 4, "timeout 4", false, nil, :timeout))
+
+    states = history.row_series(1.minute, 6, base + 1.minute).states
+
+    states[1].should eq(1)
+    states[2].should eq(2)
+    states[3].should eq(2)
+    states[4].should eq(3)
+  end
+
+  it "builds latency overlay from successful samples only" do
+    history = Ping::HistoryStore.new(Ping::Settings.new)
+    base = Time.utc(2026, 4, 1, 12, 0, 0)
+
+    history.add(Ping::SampleInput.new(base + 10.seconds, 1, "ok", true, 10.0, :success))
+    history.add(Ping::SampleInput.new(base + 20.seconds, 2, "timeout", false, nil, :timeout))
+    history.add(Ping::SampleInput.new(base + 30.seconds, 3, "ok", true, 40.0, :success))
+
+    series = history.row_series(1.minute, 6, base + 1.minute)
+    overlay = series.latency
+    scale = series.latency_scale_ms
+
+    overlay.size.should eq(6)
+    overlay[1].should eq(10.0)
+    overlay[2].should be_nil
+    overlay[3].should eq(40.0)
+    scale.should be >= 44.0
+  end
+
+  it "uses minimum latency scale when rtt values are very small" do
+    history = Ping::HistoryStore.new(Ping::Settings.new)
+    base = Time.utc(2026, 4, 1, 12, 0, 0)
+
+    history.add(Ping::SampleInput.new(base + 10.seconds, 1, "ok", true, 2.0, :success))
+    history.add(Ping::SampleInput.new(base + 20.seconds, 2, "ok", true, 3.0, :success))
+
+    scale = history.row_series(1.minute, 6, base + 1.minute).latency_scale_ms
+    scale.should eq(Ping::HistoryStore::MIN_RTT_SCALE_MS)
+  end
+end
