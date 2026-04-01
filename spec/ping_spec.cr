@@ -69,33 +69,4 @@ describe Ping do
     states[4].should eq(3)
   end
 
-  it "builds latency overlay from successful samples only" do
-    history = Ping::HistoryStore.new(Ping::Settings.new)
-    base = Time.utc(2026, 4, 1, 12, 0, 0)
-
-    history.add(Ping::SampleInput.new(base + 10.seconds, 1, "ok", true, 10.0, :success))
-    history.add(Ping::SampleInput.new(base + 20.seconds, 2, "timeout", false, nil, :timeout))
-    history.add(Ping::SampleInput.new(base + 30.seconds, 3, "ok", true, 40.0, :success))
-
-    series = history.row_series(1.minute, 6, base + 1.minute)
-    overlay = series.latency
-    scale = series.latency_scale_ms
-
-    overlay.size.should eq(6)
-    overlay[1].should eq(10.0)
-    overlay[2].should be_nil
-    overlay[3].should eq(40.0)
-    scale.should be >= 44.0
-  end
-
-  it "uses minimum latency scale when rtt values are very small" do
-    history = Ping::HistoryStore.new(Ping::Settings.new)
-    base = Time.utc(2026, 4, 1, 12, 0, 0)
-
-    history.add(Ping::SampleInput.new(base + 10.seconds, 1, "ok", true, 2.0, :success))
-    history.add(Ping::SampleInput.new(base + 20.seconds, 2, "ok", true, 3.0, :success))
-
-    scale = history.row_series(1.minute, 6, base + 1.minute).latency_scale_ms
-    scale.should eq(Ping::HistoryStore::MIN_RTT_SCALE_MS)
-  end
 end

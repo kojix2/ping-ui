@@ -49,10 +49,8 @@ module Ping
 
   struct RowSeries
     getter states : Array(Int32?)
-    getter latency : Array(Float64?)
-    getter latency_scale_ms : Float64
 
-    def initialize(@states : Array(Int32?), @latency : Array(Float64?), @latency_scale_ms : Float64)
+    def initialize(@states : Array(Int32?))
     end
   end
 end

@@ -1,7 +1,5 @@
 module Ping
   class HistoryStore
-    MIN_RTT_SCALE_MS = 20.0
-
     getter samples : Array(Sample)
 
     def initialize(@settings : Settings)
@@ -41,8 +39,7 @@ module Ping
     def row_series(window : Time::Span?, columns : Int32, now : Time = Time.local, fill_until : Time? = nil) : RowSeries
       n = [columns, 1].max
       states = Array(Int32?).new(n, nil)
-      latency = Array(Float64?).new(n, nil)
-      return RowSeries.new(states, latency, MIN_RTT_SCALE_MS) if @samples.empty?
+      return RowSeries.new(states) if @samples.empty?
 
       from_ms, span_ms = window_bounds(window, now)
       fill_until_ms = (fill_until || now).to_unix_ms
@@ -55,7 +52,7 @@ module Ping
         ms = s.recorded_at.to_unix_ms
         ms >= from_ms && ms <= fill_until_ms
       }
-      return RowSeries.new(states, latency, MIN_RTT_SCALE_MS) if relevant.empty?
+      return RowSeries.new(states) if relevant.empty?
 
       relevant.each_with_index do |sample, idx|
         col_start = ((sample.recorded_at.to_unix_ms - from_ms) / col_width).floor.to_i
@@ -74,16 +71,8 @@ module Ping
 
         sev = severity_of(sample)
         col_start.upto(col_end) { |c| states[c] = sev }
-
-        if sample.success && (rtt = sample.rtt_ms)
-          latency[col_start] = rtt
-        end
       end
-
-      rtt_values = latency.compact
-      p95 = percentile(rtt_values, 0.95)
-      scale = Math.max(MIN_RTT_SCALE_MS, p95 * 1.1)
-      RowSeries.new(states, latency, scale)
+      RowSeries.new(states)
     end
 
     private def severity_of(s : Sample) : Int32
@@ -109,13 +98,5 @@ module Ping
       {first_ms, span_ms}
     end
 
-    private def percentile(values : Array(Float64), q : Float64) : Float64
-      return 0.0 if values.empty?
-
-      sorted = values.sort
-      pos = (sorted.size * q).ceil.to_i - 1
-      idx = pos.clamp(0, sorted.size - 1)
-      sorted[idx]
-    end
   end
 end

@@ -38,6 +38,7 @@ module Ping
       return if available_height <= 0
 
       row_height = available_height / row_count
+
       plot_width = width - plot_left - padding
       return if plot_width <= 0
 
@@ -46,11 +47,12 @@ module Ping
 
       ROWS.each_with_index do |row, index|
         row_top = top + index * (row_height + row_gap)
-        draw_row(ctx, row, row_top, row_height, plot_left, plot_width, now, fill_until)
+
+        draw_status_row(ctx, row, row_top, row_height, plot_left, plot_width, now, fill_until)
       end
     end
 
-    private def draw_row(
+    private def draw_status_row(
       ctx : UIng::Area::Draw::Context,
       row : ChartRow,
       row_top : Float64,
@@ -83,12 +85,8 @@ module Ping
         fill_rect(ctx, x, row_top + 1.0, w, row_height - 2.0, r, g, b)
       end
 
-      draw_latency_overlay(ctx, series.latency, series.latency_scale_ms, row_top, row_height, plot_left, plot_width)
-
       stroke_rect(ctx, plot_left, row_top, plot_width, row_height, 0.30, 0.34, 0.39)
       draw_text(ctx, row.label, 18.0, row_top + 9.0, plot_left - 30.0, @label_font, 0.90, 0.92, 0.95)
-      draw_text(ctx, row_caption(row), 18.0, row_top + 27.0, plot_left - 30.0, @label_font, 0.55, 0.64, 0.72)
-      draw_text(ctx, "p95 #{series.latency_scale_ms.round} ms", plot_left + plot_width - 84.0, row_top + 6.0, 74.0, @label_font, 0.78, 0.82, 0.88, 0.85)
     end
 
     private def chart_title(running : Bool, current_host : String?, interval_ms : Int32) : String
@@ -108,81 +106,6 @@ module Ping
     private def chart_fill_until(now : Time, running : Bool, stopped_at : Time?) : Time
       return now if running
       stopped_at || @history.latest_sample.try(&.recorded_at) || now
-    end
-
-    private def row_caption(row : ChartRow) : String
-      case row.label
-      when "ALL"
-        "since launch"
-      when "1H"
-        "last 60 minutes"
-      when "10M"
-        "last 10 minutes"
-      else
-        "last 60 seconds"
-      end
-    end
-
-    private def draw_latency_overlay(
-      ctx : UIng::Area::Draw::Context,
-      latency : Array(Float64?),
-      scale_ms : Float64,
-      row_top : Float64,
-      row_height : Float64,
-      plot_left : Float64,
-      plot_width : Float64,
-    ) : Nil
-      return if latency.empty?
-
-      pixel_width = plot_width / latency.size
-      inner_top = row_top + 2.0
-      inner_height = row_height - 4.0
-      return if inner_height <= 0
-
-      shadow = UIng::Area::Draw::Brush.new(:solid, 0.08, 0.10, 0.13, 0.90)
-      white = UIng::Area::Draw::Brush.new(:solid, 0.98, 0.99, 1.00, 0.95)
-
-      points = [] of {Float64, Float64}
-      latency.each_with_index do |rtt, i|
-        if rtt
-          x = plot_left + pixel_width * i + pixel_width / 2.0
-          ratio = (rtt / scale_ms).clamp(0.0, 1.0)
-          y = inner_top + inner_height * (1.0 - ratio)
-          points << {x, y}
-        else
-          stroke_latency_segment(ctx, points, shadow, white)
-          points.clear
-        end
-      end
-      stroke_latency_segment(ctx, points, shadow, white)
-    end
-
-    private def stroke_latency_segment(
-      ctx : UIng::Area::Draw::Context,
-      points : Array({Float64, Float64}),
-      shadow : UIng::Area::Draw::Brush,
-      white : UIng::Area::Draw::Brush,
-    ) : Nil
-      return if points.size < 2
-
-      shadow_stroke = UIng::Area::Draw::StrokeParams.new(cap: :round, join: :round, thickness: 2.6, miter_limit: 10.0)
-      line_stroke = UIng::Area::Draw::StrokeParams.new(cap: :round, join: :round, thickness: 1.4, miter_limit: 10.0)
-
-      ctx.stroke_path(shadow, shadow_stroke) do |path|
-        x0, y0 = points[0]
-        path.new_figure(x0, y0)
-        points.each do |x, y|
-          path.line_to(x, y)
-        end
-      end
-
-      ctx.stroke_path(white, line_stroke) do |path|
-        x0, y0 = points[0]
-        path.new_figure(x0, y0)
-        points.each do |x, y|
-          path.line_to(x, y)
-        end
-      end
     end
 
     private def fill_rect(
