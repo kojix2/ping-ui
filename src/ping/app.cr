@@ -81,7 +81,7 @@ module Ping
 
       UIng::Menu.new("Help") do
         append_preferences_item.on_clicked do |_|
-          @settings_window.open
+          @settings_window.open(@window)
         end
         append_about_item.on_clicked do |w|
           w.msg_box(

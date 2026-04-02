@@ -1,19 +1,23 @@
 module Ping
   class SettingsWindow
+    WINDOW_WIDTH  = 420
+    WINDOW_HEIGHT = 400
+
     @window : UIng::Window?
 
     def initialize(@settings : Settings, @on_applied : Proc(Nil))
       @window = nil
     end
 
-    def open : Nil
+    def open(parent : UIng::Window?) : Nil
       if win = @window
+        center_on_parent(win, parent)
         win.show
         return
       end
 
       s = @settings
-      win = UIng::Window.new("Preferences", 420, 400, margined: true)
+      win = UIng::Window.new("Preferences", WINDOW_WIDTH, WINDOW_HEIGHT, margined: true)
       @window = win
 
       form = UIng::Form.new(padded: true)
@@ -79,12 +83,25 @@ module Ping
       vbox.append(form, stretchy: true)
       vbox.append(apply_btn)
       win.child = vbox
+      center_on_parent(win, parent)
 
       win.on_closing do
         @window = nil
         true
       end
       win.show
+    end
+
+    private def center_on_parent(win : UIng::Window, parent : UIng::Window?) : Nil
+      return unless parent
+
+      parent_x, parent_y = parent.position
+      parent_width, parent_height = parent.content_size
+      x = parent_x + (parent_width - WINDOW_WIDTH) // 2
+      y = parent_y + (parent_height - WINDOW_HEIGHT) // 2
+      win.set_position(x, y)
+    rescue
+      nil
     end
   end
 end
