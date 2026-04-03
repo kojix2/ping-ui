@@ -4,7 +4,7 @@ module Ping
   # Shared mutable settings for severity thresholds and chart colors.
   # severity levels: 0=ok, 1=warn, 2=alert, 3=critical
   class Settings
-    MIN_INTERVAL_MS     =  250
+    MIN_INTERVAL_MS     =  100
     MAX_INTERVAL_MS     = 5000
     DEFAULT_INTERVAL_MS = 1000
     MAX_RECENT_HOSTS    =   10
