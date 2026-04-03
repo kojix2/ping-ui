@@ -61,8 +61,10 @@ module Ping
   struct ChartRow
     getter label : String
     getter window : Time::Span?
+    getter major_tick_interval : Time::Span
+    getter minor_tick_interval : Time::Span
 
-    def initialize(@label : String, @window : Time::Span?)
+    def initialize(@label : String, @window : Time::Span?, @major_tick_interval : Time::Span, @minor_tick_interval : Time::Span)
     end
   end
 

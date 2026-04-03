@@ -1,10 +1,12 @@
 module Ping
   class ChartRenderer
+    TICK_RESERVED = 8.0 # pixels below each band reserved for tick marks
+
     ROWS = [
-      ChartRow.new("24H", 24.hours),
-      ChartRow.new("1H", 1.hour),
-      ChartRow.new("10M", 10.minutes),
-      ChartRow.new("1M", 1.minute),
+      ChartRow.new("24H", 24.hours, 6.hours, 1.hour),
+      ChartRow.new("1H", 1.hour, 10.minutes, 1.minute),
+      ChartRow.new("10M", 10.minutes, 1.minute, 10.seconds),
+      ChartRow.new("1M", 1.minute, 10.seconds, 1.second),
     ] of ChartRow
 
     def initialize(
@@ -62,14 +64,10 @@ module Ping
       now : Time,
       fill_until : Time,
     ) : Nil
-      fill_rect(ctx, 12.0, row_top, plot_left - 20.0, row_height, 0.13, 0.16, 0.20)
-      fill_rect(ctx, plot_left, row_top, plot_width, row_height, 0.12, 0.15, 0.18)
+      band_height = row_height - TICK_RESERVED
 
-      guide_width = plot_width / 4.0
-      1.upto(3) do |guide|
-        x = plot_left + guide_width * guide
-        fill_rect(ctx, x, row_top, 1.0, row_height, 0.24, 0.27, 0.32)
-      end
+      fill_rect(ctx, 12.0, row_top, plot_left - 20.0, row_height, 0.13, 0.16, 0.20)
+      fill_rect(ctx, plot_left, row_top, plot_width, band_height, 0.12, 0.15, 0.18)
 
       columns = plot_width.floor.to_i
       columns = 1 if columns < 1
@@ -82,10 +80,11 @@ module Ping
         x = plot_left + pixel_width * index
         w = pixel_width + 0.5
         r, g, b = @settings.color_for(severity)
-        fill_rect(ctx, x, row_top + 1.0, w, row_height - 2.0, r, g, b)
+        fill_rect(ctx, x, row_top + 1.0, w, band_height - 2.0, r, g, b)
       end
 
-      stroke_rect(ctx, plot_left, row_top, plot_width, row_height, 0.30, 0.34, 0.39)
+      stroke_rect(ctx, plot_left, row_top, plot_width, band_height, 0.30, 0.34, 0.39)
+      draw_ticks(ctx, row, row_top, band_height, plot_left, plot_width)
       draw_text(ctx, row.label, 18.0, row_top + 9.0, plot_left - 30.0, @label_font, 0.90, 0.92, 0.95)
     end
 
@@ -106,6 +105,45 @@ module Ping
     private def chart_fill_until(now : Time, running : Bool, stopped_at : Time?) : Time
       return now if running
       stopped_at || @history.latest_sample.try(&.recorded_at) || now
+    end
+
+    private def draw_ticks(
+      ctx : UIng::Area::Draw::Context,
+      row : ChartRow,
+      row_top : Float64,
+      band_height : Float64,
+      plot_left : Float64,
+      plot_width : Float64,
+    ) : Nil
+      return unless window = row.window
+
+      draw_tick_set(ctx, row_top, band_height, plot_left, plot_width, window, row.minor_tick_interval, TICK_RESERVED - 4.0, 0.40, 0.44, 0.50, 0.90)
+      draw_tick_set(ctx, row_top, band_height, plot_left, plot_width, window, row.major_tick_interval, TICK_RESERVED - 1.0, 0.72, 0.76, 0.82, 1.0)
+    end
+
+    private def draw_tick_set(
+      ctx : UIng::Area::Draw::Context,
+      row_top : Float64,
+      band_height : Float64,
+      plot_left : Float64,
+      plot_width : Float64,
+      window : Time::Span,
+      interval : Time::Span,
+      tick_height : Float64,
+      r : Float64,
+      g : Float64,
+      b : Float64,
+      a : Float64,
+    ) : Nil
+      count = (window.total_seconds / interval.total_seconds).round.to_i
+      return if count <= 1
+
+      tick_y = row_top + band_height + 1.0
+
+      1.upto(count - 1) do |index|
+        x = plot_left + plot_width * index.to_f64 / count
+        fill_rect(ctx, x, tick_y, 1.0, tick_height, r, g, b, a)
+      end
     end
 
     private def fill_rect(
