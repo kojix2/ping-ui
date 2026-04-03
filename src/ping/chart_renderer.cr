@@ -29,9 +29,10 @@ module Ping
       height = params.area_height
 
       fill_rect(ctx, 0.0, 0.0, width, height, 0.08, 0.10, 0.13)
-      draw_text(ctx, chart_title(running, current_host, interval_ms), 16.0, 10.0, width - 32.0, @title_font, 0.93, 0.95, 0.98)
+      title_alpha = running ? 1.0 : 0.55
+      draw_text(ctx, chart_title(running, current_host, interval_ms), 16.0, 10.0, width - 32.0, @title_font, 0.93, 0.95, 0.98, title_alpha)
 
-      plot_left = 84.0
+      plot_left = 72.0
       padding = 14.0
       top = 40.0
       row_gap = 10.0
@@ -66,7 +67,7 @@ module Ping
     ) : Nil
       band_height = row_height - TICK_RESERVED
 
-      fill_rect(ctx, 12.0, row_top, plot_left - 20.0, row_height, 0.13, 0.16, 0.20)
+      fill_rect(ctx, 12.0, row_top, plot_left - 20.0, band_height, 0.13, 0.16, 0.20)
       fill_rect(ctx, plot_left, row_top, plot_width, band_height, 0.12, 0.15, 0.18)
 
       columns = plot_width.floor.to_i
@@ -85,7 +86,8 @@ module Ping
 
       stroke_rect(ctx, plot_left, row_top, plot_width, band_height, 0.30, 0.34, 0.39)
       draw_ticks(ctx, row, row_top, band_height, plot_left, plot_width)
-      draw_text(ctx, row.label, 18.0, row_top + 9.0, plot_left - 30.0, @label_font, 0.90, 0.92, 0.95)
+      label_y = row_top + (band_height / 2.0) - 7.0
+      draw_text(ctx, row.label, 18.0, label_y, plot_left - 30.0, @label_font, 0.90, 0.92, 0.95)
     end
 
     private def chart_title(running : Bool, current_host : String?, interval_ms : Int32) : String
@@ -94,9 +96,9 @@ module Ping
       latest = @history.latest_sample
 
       if latest && latest.success? && (rtt_ms = latest.rtt_ms)
-        "#{host}  #{status}  #{interval_ms} ms  RTT #{rtt_ms.round(2)} ms"
+        "#{host}  #{status}  #{interval_ms} ms  RTT #{rtt_ms.round(1)} ms"
       elsif latest && !latest.success?
-        "#{host}  #{status}  #{interval_ms} ms  failures #{latest.failure_streak}"
+        "#{host}  #{status}  #{interval_ms} ms  FAIL ×#{latest.failure_streak}"
       else
         "#{host}  #{status}  #{interval_ms} ms"
       end
@@ -118,7 +120,7 @@ module Ping
       return unless window = row.window
 
       draw_tick_set(ctx, row_top, band_height, plot_left, plot_width, window, row.minor_tick_interval, TICK_RESERVED - 4.0, 0.40, 0.44, 0.50, 0.90)
-      draw_tick_set(ctx, row_top, band_height, plot_left, plot_width, window, row.major_tick_interval, TICK_RESERVED - 1.0, 0.72, 0.76, 0.82, 1.0)
+      draw_tick_set(ctx, row_top, band_height, plot_left, plot_width, window, row.major_tick_interval, TICK_RESERVED - 1.0, 0.72, 0.76, 0.82, 1.0, include_ends: true)
     end
 
     private def draw_tick_set(
@@ -134,13 +136,17 @@ module Ping
       g : Float64,
       b : Float64,
       a : Float64,
+      include_ends : Bool = false,
     ) : Nil
       count = (window.total_seconds / interval.total_seconds).round.to_i
       return if count <= 1
 
       tick_y = row_top + band_height + 1.0
 
-      1.upto(count - 1) do |index|
+      start_index = include_ends ? 0 : 1
+      end_index = include_ends ? count : count - 1
+
+      start_index.upto(end_index) do |index|
         x = plot_left + plot_width * index.to_f64 / count
         fill_rect(ctx, x, tick_y, 1.0, tick_height, r, g, b, a)
       end
