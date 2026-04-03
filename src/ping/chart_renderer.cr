@@ -1,7 +1,7 @@
 module Ping
   class ChartRenderer
     ROWS = [
-      ChartRow.new("ALL", nil),
+      ChartRow.new("24H", 24.hours),
       ChartRow.new("1H", 1.hour),
       ChartRow.new("10M", 10.minutes),
       ChartRow.new("1M", 1.minute),

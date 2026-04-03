@@ -1,3 +1,4 @@
+require "random/secure"
 require "uing"
 
 module Ping
@@ -23,6 +24,9 @@ module Ping
     @pinger : ICMPPinger?
     @history : HistoryStore
     @console_lines = [] of String
+    @instance_id : String
+    @current_session_id : Int64?
+    @next_local_session_id : Int64
     @current_host : String? = nil
     @running = false
     @stopped_at : Time? = nil
@@ -35,6 +39,9 @@ module Ping
       @settings = Settings.load
       @history = HistoryStore.new(@settings)
       @history_repository = nil
+      @instance_id = "#{Process.pid}-#{Random::Secure.hex(8)}"
+      @current_session_id = nil
+      @next_local_session_id = -1_i64
       font_family = default_font_family
       @label_font = UIng::FontDescriptor.new(
         family: font_family,
@@ -179,6 +186,9 @@ module Ping
       should_load_history = @current_host != host || @history.samples.empty?
       load_history_for_host(host) if should_load_history
 
+      started_at = Time.local
+      session = begin_session(host, started_at)
+
       @pinger.try(&.stop)
       @pinger = ICMPPinger.new(
         ->(line : String) { enqueue_log(line) },
@@ -188,6 +198,8 @@ module Ping
       )
 
       @current_host = host
+      @current_session_id = session.id
+      @history.start_session(session)
       @notifier.reset
       @running = true
       @stopped_at = nil
@@ -196,6 +208,7 @@ module Ping
       @area.try(&.queue_redraw_all)
       @pinger.try(&.start(host))
     rescue ex
+      end_current_session(Time.local)
       append_console("failed to start ping: #{ex.message}")
       @running = false
       @pinger = nil
@@ -205,9 +218,11 @@ module Ping
     private def stop_monitoring : Nil
       return unless @running || @pinger
 
+      stopped_at = Time.local
       append_console("stopping ping") if @running
       @running = false
-      @stopped_at = Time.local
+      @stopped_at = stopped_at
+      end_current_session(stopped_at)
       @pinger.try(&.stop)
       update_buttons
       @area.try(&.queue_redraw_all)
@@ -241,10 +256,14 @@ module Ping
 
     private def enqueue_sample(input : SampleInput) : Nil
       UIng.queue_main do
-        sample = @history.add(input)
-        if host = @current_host
-          persist_sample(host, sample)
-          @notifier.maybe_notify(host, sample)
+        if session_id = @current_session_id
+          sample = @history.add(input, session_id)
+          persist_sample(session_id, sample)
+          if host = @current_host
+            @notifier.maybe_notify(host, sample)
+          end
+        else
+          append_console("ignoring sample without monitoring session")
         end
         @area.try(&.queue_redraw_all)
       end
@@ -254,7 +273,9 @@ module Ping
       UIng.queue_main do
         @pinger = nil
         @running = false
-        @stopped_at ||= Time.local
+        stopped_at = @stopped_at || Time.local
+        @stopped_at = stopped_at
+        end_current_session(stopped_at)
         append_console(message) if message
         update_buttons
         @area.try(&.queue_redraw_all)
@@ -299,6 +320,7 @@ module Ping
     private def shutdown : Nil
       @shutting_down = true
       @stop_redraw_running = false
+      end_current_session(Time.local)
       @pinger.try(&.stop)
       @pinger = nil
       @history_repository.try(&.close)
@@ -315,11 +337,43 @@ module Ping
       nil
     end
 
-    private def persist_sample(host : String, sample : Sample) : Nil
+    private def begin_session(host : String, started_at : Time) : MonitoringSession
+      repo = repository
+      return build_local_session(host, started_at) unless repo
+
+      repo.create_session(host, @instance_id, started_at)
+    rescue ex
+      append_console("failed to create monitoring session: #{ex.message}")
+      build_local_session(host, started_at)
+    end
+
+    private def end_current_session(ended_at : Time) : Nil
+      session_id = @current_session_id
+      return unless session_id
+
+      @history.finish_session(session_id, ended_at)
+      if session_id > 0
+        begin
+          repository.try(&.close_session(session_id, ended_at))
+        rescue ex
+          append_console("failed to close monitoring session: #{ex.message}")
+        end
+      end
+
+      @current_session_id = nil
+    end
+
+    private def build_local_session(host : String, started_at : Time) : MonitoringSession
+      session_id = @next_local_session_id
+      @next_local_session_id -= 1
+      MonitoringSession.new(session_id, host, @instance_id, started_at, nil)
+    end
+
+    private def persist_sample(session_id : Int64, sample : Sample) : Nil
       repo = repository
       return unless repo
 
-      repo.save_sample(host, sample)
+      repo.save_sample(session_id, sample)
     rescue ex
       append_console("failed to save sample: #{ex.message}")
     end
@@ -328,9 +382,9 @@ module Ping
       repo = repository
       return unless repo
 
-      since = Time.local - 7.days
-      samples = repo.load_samples(host, since)
-      @history.replace(samples)
+      since = Time.local - 24.hours
+      sessions, samples = repo.load_history(host, since)
+      @history.replace(sessions, samples)
     rescue ex
       append_console("failed to load history: #{ex.message}")
     end

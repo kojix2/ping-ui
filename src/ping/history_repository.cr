@@ -3,11 +3,14 @@ require "sqlite3"
 
 module Ping
   class HistoryRepository
+    BUSY_TIMEOUT_MS = 5_000
+
     @db : DB::Database
 
     def initialize(@path : String = Settings.history_db_path)
       Dir.mkdir_p(File.dirname(@path))
       @db = DB.open("sqlite3:#{@path}")
+      configure_connection
       migrate
     end
 
@@ -15,11 +18,43 @@ module Ping
       @db.close
     end
 
-    def save_sample(host : String, sample : Sample) : Nil
+    def create_session(host : String, instance_id : String, started_at : Time) : MonitoringSession
+      result = @db.exec(
+        <<-SQL,
+        INSERT INTO monitoring_sessions (
+          host,
+          instance_id,
+          started_at_unix_ms,
+          started_at_iso
+        ) VALUES (?, ?, ?, ?)
+        SQL
+        host,
+        instance_id,
+        started_at.to_unix_ms,
+        started_at.to_s("%Y-%m-%dT%H:%M:%S%:z"),
+      )
+
+      MonitoringSession.new(result.last_insert_id, host, instance_id, started_at, nil)
+    end
+
+    def close_session(session_id : Int64, ended_at : Time) : Nil
+      @db.exec(
+        <<-SQL,
+        UPDATE monitoring_sessions
+        SET ended_at_unix_ms = ?, ended_at_iso = ?
+        WHERE id = ?
+        SQL
+        ended_at.to_unix_ms,
+        ended_at.to_s("%Y-%m-%dT%H:%M:%S%:z"),
+        session_id,
+      )
+    end
+
+    def save_sample(session_id : Int64, sample : Sample) : Nil
       @db.exec(
         <<-SQL,
         INSERT INTO samples (
-          host,
+          session_id,
           recorded_at_unix_ms,
           recorded_at_iso,
           sequence,
@@ -30,7 +65,7 @@ module Ping
           failure_streak
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         SQL
-        host,
+        session_id,
         sample.recorded_at.to_unix_ms,
         sample.recorded_at.to_s("%Y-%m-%dT%H:%M:%S%:z"),
         sample.sequence,
@@ -42,15 +77,53 @@ module Ping
       )
     end
 
+    def load_history(host : String, since : Time? = nil) : {Array(MonitoringSession), Array(Sample)}
+      {load_sessions(host, since), load_samples(host, since)}
+    end
+
+    def load_sessions(host : String, since : Time? = nil) : Array(MonitoringSession)
+      sessions = [] of MonitoringSession
+      if since
+        @db.query(
+          <<-SQL,
+          SELECT id, host, instance_id, started_at_unix_ms, ended_at_unix_ms
+          FROM monitoring_sessions
+          WHERE host = ?
+            AND (ended_at_unix_ms IS NULL OR ended_at_unix_ms >= ?)
+          ORDER BY started_at_unix_ms ASC
+          SQL
+          host,
+          since.to_unix_ms,
+        ) do |result_set|
+          read_sessions(result_set, sessions)
+        end
+      else
+        @db.query(
+          <<-SQL,
+          SELECT id, host, instance_id, started_at_unix_ms, ended_at_unix_ms
+          FROM monitoring_sessions
+          WHERE host = ?
+          ORDER BY started_at_unix_ms ASC
+          SQL
+          host,
+        ) do |result_set|
+          read_sessions(result_set, sessions)
+        end
+      end
+      sessions
+    end
+
     def load_samples(host : String, since : Time? = nil) : Array(Sample)
       samples = [] of Sample
       if since
         @db.query(
           <<-SQL,
-          SELECT recorded_at_unix_ms, sequence, raw_line, success, rtt_ms, category, failure_streak
+          SELECT samples.session_id, samples.recorded_at_unix_ms, samples.sequence, samples.raw_line,
+                 samples.success, samples.rtt_ms, samples.category, samples.failure_streak
           FROM samples
-          WHERE host = ? AND recorded_at_unix_ms >= ?
-          ORDER BY recorded_at_unix_ms ASC
+          INNER JOIN monitoring_sessions ON monitoring_sessions.id = samples.session_id
+          WHERE monitoring_sessions.host = ? AND samples.recorded_at_unix_ms >= ?
+          ORDER BY samples.recorded_at_unix_ms ASC
           SQL
           host,
           since.to_unix_ms
@@ -60,10 +133,12 @@ module Ping
       else
         @db.query(
           <<-SQL,
-          SELECT recorded_at_unix_ms, sequence, raw_line, success, rtt_ms, category, failure_streak
+          SELECT samples.session_id, samples.recorded_at_unix_ms, samples.sequence, samples.raw_line,
+                 samples.success, samples.rtt_ms, samples.category, samples.failure_streak
           FROM samples
-          WHERE host = ?
-          ORDER BY recorded_at_unix_ms ASC
+          INNER JOIN monitoring_sessions ON monitoring_sessions.id = samples.session_id
+          WHERE monitoring_sessions.host = ?
+          ORDER BY samples.recorded_at_unix_ms ASC
           SQL
           host
         ) do |result_set|
@@ -73,11 +148,29 @@ module Ping
       samples
     end
 
+    private def configure_connection : Nil
+      @db.exec "PRAGMA journal_mode=WAL"
+      @db.exec "PRAGMA busy_timeout=#{BUSY_TIMEOUT_MS}"
+      @db.exec "PRAGMA foreign_keys=ON"
+    end
+
     private def migrate : Nil
+      @db.exec <<-SQL
+      CREATE TABLE IF NOT EXISTS monitoring_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        host TEXT NOT NULL,
+        instance_id TEXT NOT NULL,
+        started_at_unix_ms INTEGER NOT NULL,
+        ended_at_unix_ms INTEGER,
+        started_at_iso TEXT NOT NULL,
+        ended_at_iso TEXT
+      )
+      SQL
+
       @db.exec <<-SQL
       CREATE TABLE IF NOT EXISTS samples (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        host TEXT NOT NULL,
+        session_id INTEGER NOT NULL,
         recorded_at_unix_ms INTEGER NOT NULL,
         recorded_at_iso TEXT NOT NULL,
         sequence INTEGER,
@@ -85,25 +178,47 @@ module Ping
         success INTEGER NOT NULL,
         rtt_ms REAL,
         category TEXT NOT NULL,
-        failure_streak INTEGER NOT NULL
+        failure_streak INTEGER NOT NULL,
+        FOREIGN KEY(session_id) REFERENCES monitoring_sessions(id)
       )
       SQL
 
       @db.exec "CREATE INDEX IF NOT EXISTS idx_samples_recorded_at ON samples(recorded_at_unix_ms)"
-      @db.exec "CREATE INDEX IF NOT EXISTS idx_samples_host_recorded_at ON samples(host, recorded_at_unix_ms)"
+      @db.exec "CREATE INDEX IF NOT EXISTS idx_samples_session_recorded_at ON samples(session_id, recorded_at_unix_ms)"
+      @db.exec "CREATE INDEX IF NOT EXISTS idx_sessions_host_started_at ON monitoring_sessions(host, started_at_unix_ms)"
     end
 
-    private def read_rows(rs : DB::ResultSet, samples : Array(Sample)) : Nil
-      rs.each do
-        recorded_at_ms = rs.read(Int64)
-        sequence = rs.read(Int64?).try(&.to_i32)
-        raw_line = rs.read(String)
-        success = rs.read(Int64) == 1_i64
-        rtt_ms = rs.read(Float64?)
-        category = rs.read(String)
-        failure_streak = rs.read(Int64).to_i32
+    private def read_sessions(result_set : DB::ResultSet, sessions : Array(MonitoringSession)) : Nil
+      result_set.each do
+        id = result_set.read(Int64)
+        host = result_set.read(String)
+        instance_id = result_set.read(String)
+        started_at_ms = result_set.read(Int64)
+        ended_at_ms = result_set.read(Int64?)
+
+        sessions << MonitoringSession.new(
+          id,
+          host,
+          instance_id,
+          Time.unix_ms(started_at_ms),
+          ended_at_ms ? Time.unix_ms(ended_at_ms) : nil,
+        )
+      end
+    end
+
+    private def read_rows(result_set : DB::ResultSet, samples : Array(Sample)) : Nil
+      result_set.each do
+        session_id = result_set.read(Int64)
+        recorded_at_ms = result_set.read(Int64)
+        sequence = result_set.read(Int64?).try(&.to_i32)
+        raw_line = result_set.read(String)
+        success = result_set.read(Int64) == 1_i64
+        rtt_ms = result_set.read(Float64?)
+        category = result_set.read(String)
+        failure_streak = result_set.read(Int64).to_i32
 
         samples << Sample.new(
+          session_id,
           Time.unix_ms(recorded_at_ms),
           sequence,
           raw_line,
