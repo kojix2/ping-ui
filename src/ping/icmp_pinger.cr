@@ -67,8 +67,7 @@ module Ping
     private def run_loop(host : String) : Nil
       resolved = resolve(host)
       unless resolved
-        @running = false
-        @on_finished.call("Cannot resolve: #{host}")
+        finish("Cannot resolve: #{host}")
         return
       end
 
@@ -94,15 +93,18 @@ module Ping
         sock.close
       end
 
-      @running = false
-      @on_finished.call(nil)
+      finish(nil)
     rescue ex
-      @running = false
-      @on_finished.call(ex.message)
+      finish(ex.message)
     end
 
     private def sleep_until(wait : Time::Span) : Nil
       sleep(wait) if wait.positive? && @running
+    end
+
+    private def finish(message : String?) : Nil
+      @running = false
+      @on_finished.call(message)
     end
 
     private def send_and_receive(sock : Socket, addr : Socket::IPAddress, seq : UInt16) : SampleInput
