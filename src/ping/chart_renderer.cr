@@ -98,7 +98,7 @@ module Ping
       if latest && latest.success? && (rtt_ms = latest.rtt_ms)
         "#{host}  #{status}  #{interval_ms} ms  RTT #{rtt_ms.round(1)} ms"
       elsif latest && !latest.success?
-        "#{host}  #{status}  #{interval_ms} ms  FAIL ×#{latest.failure_streak}"
+        "#{host}  #{status}  #{interval_ms} ms  FAIL x#{latest.failure_streak}"
       else
         "#{host}  #{status}  #{interval_ms} ms"
       end
