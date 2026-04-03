@@ -19,6 +19,7 @@ module Ping
     @settings_window : SettingsWindow
     @renderer : ChartRenderer
     @notifier : Notifier
+    @history_repository : HistoryRepository?
     @pinger : ICMPPinger?
     @history : HistoryStore
     @console_lines = [] of String
@@ -31,6 +32,7 @@ module Ping
     def initialize
       @settings = Settings.load
       @history = HistoryStore.new(@settings)
+      @history_repository = nil
       font_family = default_font_family
       @label_font = UIng::FontDescriptor.new(
         family: font_family,
@@ -172,6 +174,9 @@ module Ping
         @console.try(&.text = "")
       end
 
+      should_load_history = @current_host != host || @history.samples.empty?
+      load_history_for_host(host) if should_load_history
+
       @pinger.try(&.stop)
       @pinger = ICMPPinger.new(
         ->(line : String) { enqueue_log(line) },
@@ -216,6 +221,7 @@ module Ping
       UIng.queue_main do
         sample = @history.add(input)
         if host = @current_host
+          persist_sample(host, sample)
           @notifier.maybe_notify(host, sample)
         end
         @area.try(&.queue_redraw_all)
@@ -271,6 +277,38 @@ module Ping
     private def shutdown : Nil
       @pinger.try(&.stop)
       @pinger = nil
+      @history_repository.try(&.close)
+      @history_repository = nil
+    end
+
+    private def repository : HistoryRepository?
+      repo = @history_repository
+      return repo if repo
+
+      @history_repository = HistoryRepository.new
+    rescue ex
+      append_console("history database unavailable: #{ex.message}")
+      nil
+    end
+
+    private def persist_sample(host : String, sample : Sample) : Nil
+      repo = repository
+      return unless repo
+
+      repo.save_sample(host, sample)
+    rescue ex
+      append_console("failed to save sample: #{ex.message}")
+    end
+
+    private def load_history_for_host(host : String) : Nil
+      repo = repository
+      return unless repo
+
+      since = Time.local - 7.days
+      samples = repo.load_samples(host, since)
+      @history.replace(samples)
+    rescue ex
+      append_console("failed to load history: #{ex.message}")
     end
 
     private def default_font_family : String

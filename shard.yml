@@ -11,6 +11,8 @@ targets:
 dependencies:
   uing:
     github: kojix2/uing
+  sqlite3:
+    github: crystal-lang/crystal-sqlite3
 
 crystal: '>= 1.19.1'
 

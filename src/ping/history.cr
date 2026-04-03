@@ -12,6 +12,16 @@ module Ping
       @current_failure_streak = 0
     end
 
+    def replace(samples : Array(Sample)) : Nil
+      @samples = samples
+      last = @samples.last?
+      @current_failure_streak = if last && !last.success
+                                  last.failure_streak
+                                else
+                                  0
+                                end
+    end
+
     def add(input : SampleInput) : Sample
       if input.success
         @current_failure_streak = 0

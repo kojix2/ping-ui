@@ -37,13 +37,21 @@ module Ping
     end
 
     def self.settings_path : String
+      File.join(config_dir, "settings.json")
+    end
+
+    def self.history_db_path : String
+      File.join(config_dir, "history.sqlite3")
+    end
+
+    def self.config_dir : String
       config_home = ENV["XDG_CONFIG_HOME"]?
       if config_home && !config_home.empty?
-        return File.join(config_home, "ping-ui", "settings.json")
+        return File.join(config_home, "ping-ui")
       end
 
       home = ENV["HOME"]? || "."
-      File.join(home, ".config", "ping-ui", "settings.json")
+      File.join(home, ".config", "ping-ui")
     end
 
     def self.load : Settings
