@@ -26,6 +26,8 @@ module Ping
     @current_host : String? = nil
     @running = false
     @stopped_at : Time? = nil
+    @stop_redraw_running = false
+    @shutting_down = false
     @label_font : UIng::FontDescriptor
     @title_font : UIng::FontDescriptor
 
@@ -209,6 +211,26 @@ module Ping
       @pinger.try(&.stop)
       update_buttons
       @area.try(&.queue_redraw_all)
+      start_stop_redraw_timer
+    end
+
+    private def start_stop_redraw_timer : Nil
+      return if @stop_redraw_running
+
+      @stop_redraw_running = true
+      schedule_stop_redraw_tick(interval_ms)
+    end
+
+    private def schedule_stop_redraw_tick(delay_ms : Int32) : Nil
+      UIng.timer(delay_ms) do
+        if @running || @shutting_down
+          @stop_redraw_running = false
+        else
+          @area.try(&.queue_redraw_all)
+          schedule_stop_redraw_tick(interval_ms)
+        end
+        0_i32
+      end
     end
 
     private def enqueue_log(line : String) : Nil
@@ -275,6 +297,8 @@ module Ping
     end
 
     private def shutdown : Nil
+      @shutting_down = true
+      @stop_redraw_running = false
       @pinger.try(&.stop)
       @pinger = nil
       @history_repository.try(&.close)
