@@ -1,28 +1,26 @@
 # ping-ui
 
+Desktop ping monitor written in Crystal.
+
 ## Build
 
 ```sh
 shards build
 ```
 
-## Usage
+## Run
 
-```
+```sh
 bin/ping
 ```
 
-## Database
+## Storage
 
-- Ping samples are saved automatically while monitoring is running.
-- The database file is stored at `~/.config/ping-ui/history.sqlite3` (or `$XDG_CONFIG_HOME/ping-ui/history.sqlite3` when set).
-- Data is append-only by default and is not deleted automatically.
+- History database: ~/.config/ping-ui/history.sqlite3
+- Settings file: ~/.config/ping-ui/settings.json
+- If XDG_CONFIG_HOME is set, both files are stored under $XDG_CONFIG_HOME/ping-ui/
 
-## Persisted Files
+## Data Handling
 
-- `~/.config/ping-ui/history.sqlite3` (or `$XDG_CONFIG_HOME/ping-ui/history.sqlite3`):
-	Stores ping sample history automatically while monitoring is active.
-- `~/.config/ping-ui/settings.json` (or `$XDG_CONFIG_HOME/ping-ui/settings.json`):
-	Stores app settings (thresholds, colors, recent hosts, notification options).
-- Log export file (user-selected path via "Save Log..."):
-	Saved only when you explicitly export logs from the menu.
+- Ping history is appended to the database.
+- Old data is not deleted automatically.
