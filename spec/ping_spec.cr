@@ -5,6 +5,19 @@ private def build_session(id : Int64, host : String, started_at : Time, ended_at
 end
 
 describe Ping do
+  it "keeps fixed-period send deadlines anchored to the configured interval" do
+    started_at = Time.instant
+    schedule = Ping::ICMPPinger::FixedPeriodSchedule.new(started_at, 1.second)
+
+    schedule.remaining(started_at).should eq(0.seconds)
+    schedule.mark_sent
+    schedule.next_send_at.should eq(started_at + 1.second)
+    schedule.remaining(started_at + 500.milliseconds).should eq(500.milliseconds)
+    schedule.remaining(started_at + 1500.milliseconds).should eq(0.seconds)
+    schedule.mark_sent
+    schedule.next_send_at.should eq(started_at + 2.seconds)
+  end
+
   it "tracks failure streaks and resets them on success" do
     history = Ping::HistoryStore.new(Ping::Settings.new)
     base = Time.utc(2026, 4, 1, 12, 0, 0)

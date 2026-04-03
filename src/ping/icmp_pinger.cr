@@ -17,6 +17,23 @@ module Ping
     # IPPROTO_ICMP = 1, expressed as a Protocol enum value
     IPPROTO_ICMP = Socket::Protocol.new(1)
 
+    struct FixedPeriodSchedule
+      getter next_send_at : Time::Instant
+
+      def initialize(started_at : Time::Instant, @interval : Time::Span)
+        @next_send_at = started_at
+      end
+
+      def remaining(now : Time::Instant) : Time::Span
+        wait = @next_send_at - now
+        wait.positive? ? wait : Time::Span.zero
+      end
+
+      def mark_sent : Nil
+        @next_send_at += @interval
+      end
+    end
+
     @running : Bool
     @sequence : UInt32
     @ping_thread : Thread?
@@ -60,14 +77,18 @@ module Ping
 
       sock = Socket.new(Socket::Family::INET, Socket::Type::DGRAM, IPPROTO_ICMP)
       sock.read_timeout = TIMEOUT
+      schedule = FixedPeriodSchedule.new(Time.instant, @interval)
 
       begin
         while @running
+          sleep_until(schedule.remaining(Time.instant))
+          break unless @running
+
+          schedule.mark_sent
           seq = ((@sequence &+= 1) & 0xffff).to_u16
           result = send_and_receive(sock, addr, seq)
           @on_sample.call(result)
           @on_log.call(result.raw_line)
-          sleep @interval if @running
         end
       ensure
         sock.close
@@ -78,6 +99,10 @@ module Ping
     rescue ex
       @running = false
       @on_finished.call(ex.message)
+    end
+
+    private def sleep_until(wait : Time::Span) : Nil
+      sleep(wait) if wait.positive? && @running
     end
 
     private def send_and_receive(sock : Socket, addr : Socket::IPAddress, seq : UInt16) : SampleInput
