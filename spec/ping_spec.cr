@@ -5,6 +5,13 @@ private def build_session(id : Int64, host : String, started_at : Time, ended_at
 end
 
 describe Ping do
+  it "adds guidance for ICMP permission errors" do
+    message = Ping::ICMPPinger.start_error_message("Operation not permitted")
+
+    message.should contain("ICMP socket permission denied")
+    message.should contain("setcap cap_net_raw=+ep ./bin/ping")
+  end
+
   it "keeps fixed-period send deadlines anchored to the configured interval" do
     started_at = Time.instant
     schedule = Ping::ICMPPinger::FixedPeriodSchedule.new(started_at, 1.second)

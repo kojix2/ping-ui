@@ -52,6 +52,15 @@ module Ping
       @running
     end
 
+    def self.start_error_message(message : String?) : String?
+      return message unless message
+
+      normalized = message.downcase
+      return message unless normalized.includes?("operation not permitted") || normalized.includes?("permission denied")
+
+      "ICMP socket permission denied: #{message}. On Linux, grant CAP_NET_RAW to the binary with 'setcap cap_net_raw=+ep ./bin/ping' or run with sufficient privileges."
+    end
+
     def start(host : String) : Nil
       raise "already running" if @running
       @running = true
@@ -95,7 +104,7 @@ module Ping
 
       finish(nil)
     rescue ex
-      finish(ex.message)
+      finish(self.class.start_error_message(ex.message))
     end
 
     private def sleep_until(wait : Time::Span) : Nil
