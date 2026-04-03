@@ -85,8 +85,8 @@ module Ping
         append_preferences_item.on_clicked do |_|
           @settings_window.open(@window)
         end
-        append_about_item.on_clicked do |w|
-          w.msg_box(
+        append_about_item.on_clicked do |window|
+          window.msg_box(
             "About Ping UI",
             "Ping UI v#{VERSION}\nA ping activity monitor built with Crystal and UIng."
           )

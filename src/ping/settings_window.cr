@@ -27,7 +27,7 @@ module Ping
       alert_spinbox = UIng::Spinbox.new(1, 20)
       alert_spinbox.value = s.alert_threshold
       notify_enabled = UIng::Checkbox.new("Enable system notifications")
-      notify_enabled.checked = s.notify_enabled
+      notify_enabled.checked = s.notify_enabled?
       notify_threshold_spinbox = UIng::Spinbox.new(1, 20)
       notify_threshold_spinbox.value = s.notify_failures_threshold
 

@@ -11,12 +11,12 @@ module Ping
     end
 
     def maybe_notify(host : String, sample : Sample) : Nil
-      if sample.success
+      if sample.success?
         @notified_for_current_outage = false
         return
       end
 
-      return unless @settings.notify_enabled
+      return unless @settings.notify_enabled?
       return unless sample.failure_streak >= @settings.notify_failures_threshold
       return if @notified_for_current_outage
 

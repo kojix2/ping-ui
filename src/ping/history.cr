@@ -15,7 +15,7 @@ module Ping
     def replace(samples : Array(Sample)) : Nil
       @samples = samples
       last = @samples.last?
-      @current_failure_streak = if last && !last.success
+      @current_failure_streak = if last && !last.success?
                                   last.failure_streak
                                 else
                                   0
@@ -23,7 +23,7 @@ module Ping
     end
 
     def add(input : SampleInput) : Sample
-      if input.success
+      if input.success?
         @current_failure_streak = 0
       else
         @current_failure_streak += 1
@@ -33,7 +33,7 @@ module Ping
         input.recorded_at,
         input.sequence,
         input.raw_line,
-        input.success,
+        input.success?,
         input.rtt_ms,
         input.category,
         @current_failure_streak
@@ -58,8 +58,8 @@ module Ping
       col_width = span_ms.to_f / n
       col_width = 1.0 if col_width < 1.0
 
-      relevant = @samples.select { |s|
-        ms = s.recorded_at.to_unix_ms
+      relevant = @samples.select { |sample|
+        ms = sample.recorded_at.to_unix_ms
         ms >= from_ms && ms <= fill_until_ms
       }
       return RowSeries.new(states) if relevant.empty?
@@ -80,13 +80,13 @@ module Ping
                   end
 
         sev = severity_of(sample)
-        col_start.upto(col_end) { |c| states[c] = sev }
+        col_start.upto(col_end) { |col| states[col] = sev }
       end
       RowSeries.new(states)
     end
 
     private def severity_of(s : Sample) : Int32
-      return 0 if s.success
+      return 0 if s.success?
       streak = s.failure_streak
       return 1 if streak <= @settings.warn_threshold
       return 2 if streak <= @settings.alert_threshold

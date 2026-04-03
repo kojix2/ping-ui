@@ -20,7 +20,7 @@ module Ping
     property color_alert : {Float64, Float64, Float64}
     property color_critical : {Float64, Float64, Float64}
     property recent_hosts : Array(String)
-    property notify_enabled : Bool
+    property? notify_enabled : Bool
     property notify_failures_threshold : Int32
 
     def initialize
@@ -68,7 +68,7 @@ module Ping
       settings.color_alert = load_color(parsed["color_alert"]?) || settings.color_alert
       settings.color_critical = load_color(parsed["color_critical"]?) || settings.color_critical
       settings.recent_hosts = load_recent_hosts(parsed["recent_hosts"]?)
-      settings.notify_enabled = parsed["notify_enabled"]?.try(&.as_bool) || false
+      settings.notify_enabled = (parsed["notify_enabled"]?.try(&.as_bool) || false)
       settings.notify_failures_threshold = parsed["notify_failures_threshold"]?.try(&.as_i).try(&.to_i32) || settings.notify_failures_threshold
       settings.normalize!
       settings

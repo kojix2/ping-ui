@@ -94,9 +94,9 @@ module Ping
       host = current_host || "no target"
       latest = @history.latest_sample
 
-      if latest && latest.success && (rtt_ms = latest.rtt_ms)
+      if latest && latest.success? && (rtt_ms = latest.rtt_ms)
         "#{host}  #{status}  #{interval_ms} ms  RTT #{rtt_ms.round(2)} ms"
-      elsif latest && !latest.success
+      elsif latest && !latest.success?
         "#{host}  #{status}  #{interval_ms} ms  failures #{latest.failure_streak}"
       else
         "#{host}  #{status}  #{interval_ms} ms"

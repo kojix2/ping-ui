@@ -107,7 +107,7 @@ module Ping
       # [4..5] identifier = 0  (macOS kernel replaces with socket's ephemeral id for DGRAM ICMP)
       pkt[6] = (seq >> 8).to_u8
       pkt[7] = (seq & 0xff).to_u8
-      PAYLOAD.bytes.each_with_index { |b, i| pkt[8 + i] = b.to_u8 }
+      PAYLOAD.bytes.each_with_index { |byte, i| pkt[8 + i] = byte.to_u8 }
       csum = icmp_checksum(pkt)
       pkt[2] = (csum >> 8).to_u8
       pkt[3] = (csum & 0xff).to_u8

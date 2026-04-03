@@ -15,7 +15,7 @@ describe Ping::HistoryRepository do
       loaded_sample = loaded.first
       loaded_sample.sequence.should eq(42)
       loaded_sample.raw_line.should eq("ok")
-      loaded_sample.success.should eq(true)
+      loaded_sample.success?.should eq(true)
       loaded_sample.rtt_ms.should eq(11.5)
       loaded_sample.category.should eq(:success)
       loaded_sample.failure_streak.should eq(0)

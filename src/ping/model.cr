@@ -3,7 +3,7 @@ module Ping
     getter recorded_at : Time
     getter sequence : Int32?
     getter raw_line : String
-    getter success : Bool
+    getter? success : Bool
     getter rtt_ms : Float64?
     getter category : Symbol
 
@@ -22,7 +22,7 @@ module Ping
     getter recorded_at : Time
     getter sequence : Int32?
     getter raw_line : String
-    getter success : Bool
+    getter? success : Bool
     getter rtt_ms : Float64?
     getter category : Symbol
     getter failure_streak : Int32

@@ -35,7 +35,7 @@ module Ping
         sample.recorded_at.to_s("%Y-%m-%dT%H:%M:%S%:z"),
         sample.sequence,
         sample.raw_line,
-        sample.success ? 1 : 0,
+        sample.success? ? 1 : 0,
         sample.rtt_ms,
         sample.category.to_s,
         sample.failure_streak
@@ -54,8 +54,8 @@ module Ping
           SQL
           host,
           since.to_unix_ms
-        ) do |rs|
-          read_rows(rs, samples)
+        ) do |result_set|
+          read_rows(result_set, samples)
         end
       else
         @db.query(
@@ -66,8 +66,8 @@ module Ping
           ORDER BY recorded_at_unix_ms ASC
           SQL
           host
-        ) do |rs|
-          read_rows(rs, samples)
+        ) do |result_set|
+          read_rows(result_set, samples)
         end
       end
       samples
