@@ -88,6 +88,8 @@ module Ping
         @stop_item.try(&.disable)
         append_separator
         append_item("Save Log...").on_clicked { |_| save_log }
+        append_separator
+        append_quit_item
       end
 
       UIng::Menu.new("Help") do
@@ -156,6 +158,10 @@ module Ping
         stop_monitoring
         UIng.quit
         true
+      end
+      UIng.on_should_quit do
+        window.destroy # You have to destroy the window manually.
+        true           # UIng.quit is automatically called in the C function onQuitClicked().
       end
 
       @window = window
