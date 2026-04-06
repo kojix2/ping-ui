@@ -8,6 +8,14 @@ Desktop ping monitor written in Crystal.
 shards build
 ```
 
+macOS app bundle and DMG:
+
+```sh
+./build-mac.sh
+```
+
+Generated artifacts are placed in dist/.
+
 ## Run
 
 ```sh
