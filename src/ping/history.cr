@@ -74,12 +74,12 @@ module Ping
       @samples.last?
     end
 
-    def row_series(window : Time::Span?, columns : Int32, now : Time = Time.local, fill_until : Time? = nil) : RowSeries
+    def row_series(window : Time::Span?, columns : Int32, now : Time = Time.local, fill_until : Time? = nil, *, anchor_time : Time? = nil) : RowSeries
       n = [columns, 1].max
       states = Array(Int32?).new(n, nil)
       return RowSeries.new(states) if @samples.empty? && @sessions.empty?
 
-      from_ms, span_ms = window_bounds(window, now)
+      from_ms, span_ms = window_bounds(window, now, anchor_time)
       fill_until_ms = (fill_until || now).to_unix_ms
       fill_until_ms = from_ms if fill_until_ms < from_ms
       fill_until_ms = from_ms + span_ms if fill_until_ms > from_ms + span_ms
@@ -167,13 +167,14 @@ module Ping
       3
     end
 
-    private def window_bounds(window : Time::Span?, now : Time) : {Int64, Int64}
+    private def window_bounds(window : Time::Span?, now : Time, anchor_time : Time? = nil) : {Int64, Int64}
+      anchor_ms = (anchor_time || now).to_unix_ms
       now_ms = now.to_unix_ms
 
       if window
         span_ms = window.total_milliseconds.to_i64
         span_ms = 1_i64 if span_ms <= 0
-        return {now_ms - span_ms, span_ms}
+        return {anchor_ms - span_ms, span_ms}
       end
 
       first_session_ms = @sessions.first?.try(&.started_at.to_unix_ms)

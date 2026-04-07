@@ -136,4 +136,26 @@ describe Ping do
     states[3].should eq(2)
     states[4].should eq(3)
   end
+
+  it "can anchor a 24-hour series to a specific day boundary" do
+    history = Ping::HistoryStore.new(Ping::Settings.new)
+
+    day1_start = Time.utc(2026, 4, 1, 0, 0, 0)
+    day2_start = Time.utc(2026, 4, 2, 0, 0, 0)
+    day3_start = Time.utc(2026, 4, 3, 0, 0, 0)
+
+    session1 = build_session(1_i64, "8.8.8.8", day1_start + 3.hours, day1_start + 6.hours)
+    session2 = build_session(2_i64, "8.8.8.8", day2_start + 15.hours, day2_start + 18.hours)
+    history.start_session(session1)
+    history.start_session(session2)
+
+    history.add(Ping::SampleInput.new(day1_start + 3.hours, 1, "ok", true, 10.0, :success), session1.id)
+    history.add(Ping::SampleInput.new(day2_start + 15.hours, 2, "timeout", false, nil, :timeout), session2.id)
+
+    day1_states = history.row_series(24.hours, 4, day2_start, day2_start, anchor_time: day2_start).states
+    day2_states = history.row_series(24.hours, 4, day3_start, day3_start, anchor_time: day3_start).states
+
+    day1_states.should eq([0, nil, nil, nil])
+    day2_states.should eq([nil, nil, 1, nil])
+  end
 end

@@ -3,10 +3,11 @@ require "uing"
 
 module Ping
   class App
-    WINDOW_TITLE       = "Ping Activity Monitor"
-    WINDOW_WIDTH       = 450
-    WINDOW_HEIGHT      = 600
-    CONSOLE_LINE_LIMIT = 800
+    HISTORY_LOOKBACK_DAYS = 7
+    WINDOW_TITLE          = "Ping Activity Monitor"
+    WINDOW_WIDTH          = 450
+    WINDOW_HEIGHT         = 600
+    CONSOLE_LINE_LIMIT    = 800
 
     @settings : Settings
     @window : UIng::Window?
@@ -18,6 +19,7 @@ module Ping
     @start_item : UIng::MenuItem?
     @stop_item : UIng::MenuItem?
     @settings_window : SettingsWindow
+    @weekly_dashboard_window : WeeklyDashboardWindow
     @renderer : ChartRenderer
     @notifier : Notifier
     @history_repository : HistoryRepository?
@@ -62,6 +64,7 @@ module Ping
       @settings_window = SettingsWindow.new(@settings, -> {
         @area.try(&.queue_redraw_all)
       })
+      @weekly_dashboard_window = WeeklyDashboardWindow.new(@settings, @label_font, @title_font)
     end
 
     def run : Nil
@@ -90,6 +93,12 @@ module Ping
         append_item("Save Log...").on_clicked { |_| save_log }
         append_separator
         append_quit_item
+      end
+
+      UIng::Menu.new("View") do
+        append_item("Weekly Dashboard").on_clicked do |_|
+          @weekly_dashboard_window.open(@window, @current_host, @history)
+        end
       end
 
       UIng::Menu.new("Help") do
@@ -329,6 +338,7 @@ module Ping
       end_current_session(Time.local)
       @pinger.try(&.stop)
       @pinger = nil
+      @weekly_dashboard_window.close
       @history_repository.try(&.close)
       @history_repository = nil
     end
@@ -388,11 +398,19 @@ module Ping
       repo = repository
       return unless repo
 
-      since = Time.local - 24.hours
+      since = weekly_history_since(Time.local)
       sessions, samples = repo.load_history(host, since)
       @history.replace(sessions, samples)
     rescue ex
       append_console("failed to load history: #{ex.message}")
+    end
+
+    private def weekly_history_since(reference : Time) : Time
+      start_of_day(reference) - (HISTORY_LOOKBACK_DAYS - 1).days
+    end
+
+    private def start_of_day(time : Time) : Time
+      Time.local(time.year, time.month, time.day)
     end
 
     private def default_font_family : String
