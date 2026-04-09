@@ -177,4 +177,41 @@ describe Ping do
     day1_states.should eq([0, nil, nil, nil])
     day2_states.should eq([nil, nil, 1, nil])
   end
+
+  it "can zoom to a same-day hourly window" do
+    history = Ping::HistoryStore.new(Ping::Settings.new)
+    day_start = Time.utc(2026, 4, 9, 0, 0, 0)
+    session = build_session(1_i64, "8.8.8.8", day_start + 8.hours, day_start + 18.hours)
+    history.start_session(session)
+
+    history.add(Ping::SampleInput.new(day_start + 8.hours, 1, "before window", true, 10.0, :success), session.id)
+    history.add(Ping::SampleInput.new(day_start + 9.hours, 2, "start", true, 10.0, :success), session.id)
+    history.add(Ping::SampleInput.new(day_start + 12.hours, 3, "midday fail", false, nil, :timeout), session.id)
+    history.add(Ping::SampleInput.new(day_start + 15.hours, 4, "recovered", true, 10.0, :success), session.id)
+
+    states = history.row_series(9.hours, 9, day_start + 18.hours, day_start + 18.hours, anchor_time: day_start + 18.hours).states
+
+    states.should eq([0, 0, 0, 1, 1, 1, 0, 0, 0])
+  end
+
+  it "clips the current-day zoom window at snapshot time" do
+    history = Ping::HistoryStore.new(Ping::Settings.new)
+    day_start = Time.utc(2026, 4, 9, 0, 0, 0)
+    session = build_session(1_i64, "8.8.8.8", day_start + 9.hours)
+    history.start_session(session)
+
+    history.add(Ping::SampleInput.new(day_start + 9.hours, 1, "start", true, 10.0, :success), session.id)
+
+    states = history.row_series(9.hours, 9, day_start + 18.hours, day_start + 12.hours, anchor_time: day_start + 18.hours).states
+
+    states[0].should eq(0)
+    states[1].should eq(0)
+    states[2].should eq(0)
+    states[3].should be_nil
+    states[4].should be_nil
+    states[5].should be_nil
+    states[6].should be_nil
+    states[7].should be_nil
+    states[8].should be_nil
+  end
 end

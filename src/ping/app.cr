@@ -64,7 +64,12 @@ module Ping
       @settings_window = SettingsWindow.new(@settings, -> {
         @area.try(&.queue_redraw_all)
       })
-      @weekly_dashboard_window = WeeklyDashboardWindow.new(@settings, @label_font, @title_font)
+      @weekly_dashboard_window = WeeklyDashboardWindow.new(
+        @settings,
+        @label_font,
+        @title_font,
+        ->(host : String?) { history_snapshot_for(host) }
+      )
     end
 
     def run : Nil
@@ -97,7 +102,7 @@ module Ping
 
       UIng::Menu.new("View") do
         append_item("Weekly Dashboard").on_clicked do |_|
-          @weekly_dashboard_window.open(@window, @current_host, @history)
+          @weekly_dashboard_window.open(@window, @current_host)
         end
       end
 
@@ -407,6 +412,24 @@ module Ping
 
     private def weekly_history_since(reference : Time) : Time
       start_of_day(reference) - (HISTORY_LOOKBACK_DAYS - 1).days
+    end
+
+    private def history_snapshot_for(host : String?) : HistoryStore
+      return HistoryStore.new(@settings) unless host
+
+      return @history.snapshot if @current_host == host
+
+      repo = repository
+      return HistoryStore.new(@settings) unless repo
+
+      since = weekly_history_since(Time.local)
+      sessions, samples = repo.load_history(host, since)
+      snapshot = HistoryStore.new(@settings)
+      snapshot.replace(sessions, samples)
+      snapshot
+    rescue ex
+      append_console("failed to load weekly dashboard history: #{ex.message}")
+      HistoryStore.new(@settings)
     end
 
     private def start_of_day(time : Time) : Time

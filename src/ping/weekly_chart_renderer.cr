@@ -15,13 +15,15 @@ module Ping
       params : UIng::Area::Draw::Params,
       current_host : String?,
       snapshot_at : Time,
+      range_start_hour : Int32,
+      range_end_hour : Int32,
     ) : Nil
       ctx = params.context
       width = params.area_width
       height = params.area_height
 
       fill_rect(ctx, 0.0, 0.0, width, height, 0.08, 0.10, 0.13)
-      draw_text(ctx, chart_title(current_host, snapshot_at), 16.0, 10.0, width - 32.0, @title_font, 0.93, 0.95, 0.98)
+      draw_text(ctx, chart_title(current_host, snapshot_at, range_start_hour, range_end_hour), 16.0, 10.0, width - 32.0, @title_font, 0.93, 0.95, 0.98)
 
       plot_left = 116.0
       padding = 8.0
@@ -37,13 +39,16 @@ module Ping
       return if plot_width <= 0
 
       day0_start = start_of_day(snapshot_at)
+      window_span = (range_end_hour - range_start_hour).hours
+      major_tick_interval, minor_tick_interval = tick_intervals_for(window_span)
 
       WINDOW_DAYS.times do |index|
         row_top = top + index * (row_height + row_gap)
         day_start = day0_start - index.days
-        anchor_time = day_start + 24.hours
-        fill_until = index == 0 ? snapshot_at : anchor_time
-        row = ChartRow.new(day_label(day_start), 24.hours, 6.hours, 1.hour)
+        anchor_time = day_start + range_end_hour.hours
+        row_end = index == 0 ? snapshot_at : anchor_time
+        fill_until = row_end > anchor_time ? anchor_time : row_end
+        row = ChartRow.new(day_label(day_start), window_span, major_tick_interval, minor_tick_interval)
 
         draw_status_row(ctx, row, row_top, row_height, plot_left, plot_width, anchor_time, fill_until)
       end
@@ -84,9 +89,24 @@ module Ping
       draw_text(ctx, row.label, 14.0, label_y, plot_left - 24.0, @label_font, 0.90, 0.92, 0.95)
     end
 
-    private def chart_title(current_host : String?, snapshot_at : Time) : String
+    private def chart_title(current_host : String?, snapshot_at : Time, range_start_hour : Int32, range_end_hour : Int32) : String
       host = current_host || "no target"
-      "Weekly Dashboard  #{host}  Snapshot #{snapshot_at.to_s("%m/%d %H:%M")}"
+      "Weekly Dashboard  #{host}  #{hour_label(range_start_hour)}-#{hour_label(range_end_hour)}  Snapshot #{snapshot_at.to_s("%m/%d %H:%M")}"
+    end
+
+    private def tick_intervals_for(window_span : Time::Span) : {Time::Span, Time::Span}
+      span_hours = window_span.total_hours
+      major = if span_hours <= 4
+                1.hour
+              elsif span_hours <= 8
+                2.hours
+              elsif span_hours <= 12
+                3.hours
+              else
+                6.hours
+              end
+      minor = span_hours <= 6 ? 30.minutes : 1.hour
+      {major, minor}
     end
 
     private def draw_ticks(
@@ -197,6 +217,10 @@ module Ping
 
     private def day_label(day_start : Time) : String
       day_start.to_s("%a %m/%d")
+    end
+
+    private def hour_label(hour : Int32) : String
+      hour.to_s.rjust(2, '0') + ":00"
     end
   end
 end
