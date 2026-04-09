@@ -29,8 +29,7 @@ module Ping
       end
 
       snapshot_at = Time.local
-      snapshot_history = HistoryStore.new(@settings)
-      snapshot_history.replace(history.sessions.dup, history.samples.dup)
+      snapshot_history = history.snapshot
       @renderer = WeeklyChartRenderer.new(@settings, snapshot_history, @label_font, @title_font)
       @snapshot_at = snapshot_at
       @snapshot_host = host

@@ -29,6 +29,24 @@ module Ping
                                 end
     end
 
+    def snapshot : HistoryStore
+      snapshot = HistoryStore.new(@settings)
+      snapshot.replace(@sessions.dup, @samples.dup, live_session_id: @live_session_id)
+      snapshot
+    end
+
+    def replace(sessions : Array(MonitoringSession), samples : Array(Sample), *, live_session_id : Int64?) : Nil
+      @sessions = sessions
+      @samples = samples
+      @live_session_id = live_session_id
+      last = @samples.last?
+      @current_failure_streak = if last && !last.success?
+                                  last.failure_streak
+                                else
+                                  0
+                                end
+    end
+
     def start_session(session : MonitoringSession) : Nil
       @sessions << session
       @live_session_id = session.id if session.ended_at.nil?

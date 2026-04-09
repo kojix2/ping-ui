@@ -115,6 +115,25 @@ describe Ping do
     states[5].should be_nil
   end
 
+  it "preserves live sessions when building a history snapshot" do
+    history = Ping::HistoryStore.new(Ping::Settings.new)
+    base = Time.utc(2026, 4, 1, 12, 0, 0)
+    live_session = build_session(1_i64, "8.8.8.8", base + 10.seconds)
+    history.start_session(live_session)
+
+    history.add(Ping::SampleInput.new(base + 10.seconds, 1, "ok", true, 11.0, :success), live_session.id)
+
+    snapshot = history.snapshot
+    states = snapshot.row_series(1.minute, 6, base + 1.minute, base + 1.minute).states
+
+    states[0].should be_nil
+    states[1].should eq(0)
+    states[2].should eq(0)
+    states[3].should eq(0)
+    states[4].should eq(0)
+    states[5].should eq(0)
+  end
+
   it "uses configurable thresholds for severity levels" do
     settings = Ping::Settings.new
     settings.warn_threshold = 1
