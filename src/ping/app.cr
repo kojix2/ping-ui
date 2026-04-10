@@ -35,6 +35,7 @@ module Ping
     @stop_redraw_running = false
     @shutting_down = false
     @label_font : UIng::FontDescriptor
+    @tick_font : UIng::FontDescriptor
     @title_font : UIng::FontDescriptor
 
     def initialize
@@ -48,6 +49,13 @@ module Ping
       @label_font = UIng::FontDescriptor.new(
         family: font_family,
         size: 12,
+        weight: :normal,
+        italic: :normal,
+        stretch: :normal
+      )
+      @tick_font = UIng::FontDescriptor.new(
+        family: font_family,
+        size: 9,
         weight: :normal,
         italic: :normal,
         stretch: :normal
@@ -67,6 +75,7 @@ module Ping
       @weekly_dashboard_window = WeeklyDashboardWindow.new(
         @settings,
         @label_font,
+        @tick_font,
         @title_font,
         ->(host : String?) { history_snapshot_for(host) }
       )
@@ -83,6 +92,7 @@ module Ping
     ensure
       shutdown
       @label_font.free
+      @tick_font.free
       @title_font.free
       UIng.uninit
     end

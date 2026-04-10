@@ -1,12 +1,13 @@
 module Ping
   class WeeklyChartRenderer
-    TICK_RESERVED = 8.0
-    WINDOW_DAYS   =   7
+    TICK_RESERVED = 20.0
+    WINDOW_DAYS   =    7
 
     def initialize(
       @settings : Settings,
       @history : HistoryStore,
       @label_font : UIng::FontDescriptor,
+      @tick_font : UIng::FontDescriptor,
       @title_font : UIng::FontDescriptor,
     )
     end
@@ -84,7 +85,7 @@ module Ping
       end
 
       stroke_rect(ctx, plot_left, row_top, plot_width, band_height, 0.30, 0.34, 0.39)
-      draw_ticks(ctx, row, row_top, band_height, plot_left, plot_width)
+      draw_ticks(ctx, row, row_top, band_height, plot_left, plot_width, anchor_time)
       label_y = row_top + (band_height / 2.0) - 7.0
       draw_text(ctx, row.label, 14.0, label_y, plot_left - 24.0, @label_font, 0.90, 0.92, 0.95)
     end
@@ -116,11 +117,41 @@ module Ping
       band_height : Float64,
       plot_left : Float64,
       plot_width : Float64,
+      anchor_time : Time,
     ) : Nil
       return unless window = row.window
 
-      draw_tick_set(ctx, row_top, band_height, plot_left, plot_width, window, row.minor_tick_interval, TICK_RESERVED - 4.0, 0.40, 0.44, 0.50, 0.90)
-      draw_tick_set(ctx, row_top, band_height, plot_left, plot_width, window, row.major_tick_interval, TICK_RESERVED - 1.0, 0.72, 0.76, 0.82, 1.0, include_ends: true)
+      draw_tick_set(ctx, row_top, band_height, plot_left, plot_width, window, row.minor_tick_interval, 5.0, 0.40, 0.44, 0.50, 0.90)
+      draw_tick_set(ctx, row_top, band_height, plot_left, plot_width, window, row.major_tick_interval, 8.0, 0.72, 0.76, 0.82, 1.0, include_ends: true)
+      draw_tick_labels(ctx, row_top, band_height, plot_left, plot_width, window, row.major_tick_interval, anchor_time)
+    end
+
+    private def draw_tick_labels(
+      ctx : UIng::Area::Draw::Context,
+      row_top : Float64,
+      band_height : Float64,
+      plot_left : Float64,
+      plot_width : Float64,
+      window : Time::Span,
+      interval : Time::Span,
+      anchor_time : Time,
+    ) : Nil
+      count = (window.total_seconds / interval.total_seconds).round.to_i
+      return if count <= 0
+
+      tick_y = row_top + band_height + 10.0
+      window_start = anchor_time - window
+
+      0.upto(count) do |index|
+        x = plot_left + plot_width * index.to_f64 / count
+        label_time = window_start + interval * index
+        label_x = if index == count
+                    x - 28.0
+                  else
+                    x + 2.0
+                  end
+        draw_text(ctx, tick_label(label_time), label_x, tick_y, 28.0, @tick_font, 0.66, 0.70, 0.76, 0.95)
+      end
     end
 
     private def draw_tick_set(
@@ -217,6 +248,10 @@ module Ping
 
     private def day_label(day_start : Time) : String
       day_start.to_s("%a %m/%d")
+    end
+
+    private def tick_label(time : Time) : String
+      time.to_s("%H:%M")
     end
 
     private def hour_label(hour : Int32) : String
