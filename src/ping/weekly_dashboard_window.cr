@@ -18,6 +18,7 @@ module Ping
       @label_font : UIng::FontDescriptor,
       @tick_font : UIng::FontDescriptor,
       @title_font : UIng::FontDescriptor,
+      @window_days : Int32,
       @history_loader : Proc(String?, HistoryStore),
     )
       @window = nil
@@ -141,7 +142,7 @@ module Ping
       snapshot_at = Time.local
       host = @source_host
       snapshot_history = @history_loader.call(host)
-      @renderer = WeeklyChartRenderer.new(@settings, snapshot_history, @label_font, @tick_font, @title_font)
+      @renderer = WeeklyChartRenderer.new(@settings, snapshot_history, @label_font, @tick_font, @title_font, @window_days)
       @snapshot_at = snapshot_at
       @snapshot_host = host
       @host_label.try(&.text = host_text(host))

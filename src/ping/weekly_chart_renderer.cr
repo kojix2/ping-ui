@@ -1,7 +1,6 @@
 module Ping
   class WeeklyChartRenderer
     TICK_RESERVED = 20.0
-    WINDOW_DAYS   =    7
 
     def initialize(
       @settings : Settings,
@@ -9,6 +8,7 @@ module Ping
       @label_font : UIng::FontDescriptor,
       @tick_font : UIng::FontDescriptor,
       @title_font : UIng::FontDescriptor,
+      @window_days : Int32,
     )
     end
 
@@ -30,7 +30,7 @@ module Ping
       padding = 8.0
       top = 28.0
       row_gap = 4.0
-      row_count = WINDOW_DAYS
+      row_count = @window_days
       available_height = height - top - padding - row_gap * (row_count - 1)
       return if available_height <= 0
 
@@ -43,7 +43,7 @@ module Ping
       window_span = (range_end_hour - range_start_hour).hours
       major_tick_interval, minor_tick_interval = tick_intervals_for(window_span)
 
-      WINDOW_DAYS.times do |index|
+      @window_days.times do |index|
         row_top = top + index * (row_height + row_gap)
         day_start = day0_start - index.days
         anchor_time = day_start + range_end_hour.hours

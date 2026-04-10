@@ -3,7 +3,7 @@ require "uing"
 
 module Ping
   class App
-    HISTORY_LOOKBACK_DAYS = 7
+    WEEKLY_DASHBOARD_DAYS = 14
     WINDOW_TITLE          = "Ping Activity Monitor"
     WINDOW_WIDTH          = 450
     WINDOW_HEIGHT         = 600
@@ -77,6 +77,7 @@ module Ping
         @label_font,
         @tick_font,
         @title_font,
+        WEEKLY_DASHBOARD_DAYS,
         ->(host : String?) { history_snapshot_for(host) }
       )
     end
@@ -421,7 +422,7 @@ module Ping
     end
 
     private def weekly_history_since(reference : Time) : Time
-      start_of_day(reference) - (HISTORY_LOOKBACK_DAYS - 1).days
+      start_of_day(reference) - (WEEKLY_DASHBOARD_DAYS - 1).days
     end
 
     private def history_snapshot_for(host : String?) : HistoryStore
