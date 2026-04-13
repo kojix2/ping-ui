@@ -1,5 +1,7 @@
 # ping-ui
 
+<img src=
+
 Desktop ping monitor written in Crystal.
 
 ## Build
@@ -7,6 +9,8 @@ Desktop ping monitor written in Crystal.
 ```sh
 shards build
 ```
+
+Windows build is intended to work with Crystal for MinGW64. A GitHub Actions workflow is included to validate that the project still builds on Windows.
 
 macOS app bundle and DMG:
 
@@ -22,11 +26,19 @@ Generated artifacts are placed in dist/.
 bin/ping
 ```
 
+## Windows Status
+
+- Windows support is implemented on a best-effort basis and should build against Crystal MinGW64.
+- ICMP monitoring uses the Windows IcmpSendEcho API instead of raw sockets.
+- Windows desktop notifications are not implemented yet.
+- Packaging for Windows is not implemented yet.
+
 ## Storage
 
 - History database: ~/.config/ping-ui/history.sqlite3
 - Settings file: ~/.config/ping-ui/settings.json
 - If XDG_CONFIG_HOME is set, both files are stored under $XDG_CONFIG_HOME/ping-ui/
+- On Windows, both files are stored under %APPDATA%/ping-ui/ when APPDATA is available.
 
 ## Data Handling
 

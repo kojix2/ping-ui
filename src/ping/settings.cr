@@ -45,6 +45,17 @@ module Ping
     end
 
     def self.config_dir : String
+      {% if flag?(:win32) %}
+        app_data = ENV["APPDATA"]?
+        return File.join(app_data, "ping-ui") if app_data && !app_data.empty?
+
+        local_app_data = ENV["LOCALAPPDATA"]?
+        return File.join(local_app_data, "ping-ui") if local_app_data && !local_app_data.empty?
+
+        home = ENV["USERPROFILE"]? || "."
+        return File.join(home, "AppData", "Roaming", "ping-ui")
+      {% end %}
+
       config_home = ENV["XDG_CONFIG_HOME"]?
       if config_home && !config_home.empty?
         return File.join(config_home, "ping-ui")
