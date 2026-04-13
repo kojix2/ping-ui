@@ -1,6 +1,11 @@
 # ping-ui
 
-<img src=
+<div align="center">
+  <img src="resources/app_icon.png" height="80" width="80" alt="ping-ui icon">
+</div>
+
+[![build](https://github.com/kojix2/ping-ui/actions/workflows/build.yml/badge.svg)](https://github.com/kojix2/ping-ui/actions/workflows/build.yml)
+
 
 Desktop ping monitor written in Crystal.
 
