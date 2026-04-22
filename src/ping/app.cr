@@ -30,6 +30,7 @@ module Ping
     @current_session_id : Int64?
     @next_local_session_id : Int64
     @current_host : String? = nil
+    @pinger_generation : UInt64
     @running = false
     @stopped_at : Time? = nil
     @stop_redraw_running = false
@@ -45,6 +46,7 @@ module Ping
       @instance_id = "#{Process.pid}-#{Random::Secure.hex(8)}"
       @current_session_id = nil
       @next_local_session_id = -1_i64
+      @pinger_generation = 0_u64
       font_family = default_font_family
       @label_font = UIng::FontDescriptor.new(
         family: font_family,
@@ -221,10 +223,12 @@ module Ping
       session = begin_session(host, started_at)
 
       @pinger.try(&.stop)
+      generation = (@pinger_generation &+= 1)
+
       @pinger = ICMPPinger.new(
-        ->(line : String) { enqueue_log(line) },
-        ->(input : SampleInput) { enqueue_sample(input) },
-        ->(message : String?) { enqueue_finish(message) },
+        ->(line : String) { enqueue_log(generation, line) },
+        ->(input : SampleInput) { enqueue_sample(generation, input) },
+        ->(message : String?) { enqueue_finish(generation, message) },
         interval_span
       )
 
@@ -279,14 +283,16 @@ module Ping
       end
     end
 
-    private def enqueue_log(line : String) : Nil
+    private def enqueue_log(generation : UInt64, line : String) : Nil
       UIng.queue_main do
+        next unless generation == @pinger_generation
         append_console(line)
       end
     end
 
-    private def enqueue_sample(input : SampleInput) : Nil
+    private def enqueue_sample(generation : UInt64, input : SampleInput) : Nil
       UIng.queue_main do
+        next unless generation == @pinger_generation
         if session_id = @current_session_id
           sample = @history.add(input, session_id)
           persist_sample(session_id, sample)
@@ -300,8 +306,9 @@ module Ping
       end
     end
 
-    private def enqueue_finish(message : String?) : Nil
+    private def enqueue_finish(generation : UInt64, message : String?) : Nil
       UIng.queue_main do
+        next unless generation == @pinger_generation
         @pinger = nil
         @running = false
         stopped_at = @stopped_at || Time.local
@@ -352,8 +359,14 @@ module Ping
       @shutting_down = true
       @stop_redraw_running = false
       end_current_session(Time.local)
-      @pinger.try(&.stop)
+
+      # Stop pinger and wait for its thread to complete
+      if pinger = @pinger
+        pinger.stop
+        pinger.wait_for_completion
+      end
       @pinger = nil
+
       @weekly_dashboard_window.close
       @history_repository.try(&.close)
       @history_repository = nil

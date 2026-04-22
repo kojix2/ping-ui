@@ -66,6 +66,13 @@ module Ping
       @running = false
     end
 
+    def wait_for_completion : Nil
+      if thread = @ping_thread
+        thread.join
+        @ping_thread = nil
+      end
+    end
+
     private def run_loop(host : String) : Nil
       resolved = resolve(host)
       unless resolved
