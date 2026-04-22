@@ -1,6 +1,9 @@
 module Ping
   class WeeklyChartRenderer
-    TICK_RESERVED = 20.0
+    TICK_RESERVED      = 20.0
+    TICK_LABEL_WIDTH   = 40.0
+    MINOR_TICK_HEIGHT  = 5.0
+    MAJOR_TICK_HEIGHT  = 8.0
 
     def initialize(
       @settings : Settings,
@@ -120,10 +123,15 @@ module Ping
       anchor_time : Time,
     ) : Nil
       return unless window = row.window
+      window_start = anchor_time - window
+      tick_origin = start_of_day(window_start)
+      minor_ticks = aligned_tick_times(window_start, anchor_time, row.minor_tick_interval, tick_origin)
+      major_ticks = aligned_tick_times(window_start, anchor_time, row.major_tick_interval, tick_origin)
+      labels = label_times(window_start, anchor_time, major_ticks)
 
-      draw_tick_set(ctx, row_top, band_height, plot_left, plot_width, window, row.minor_tick_interval, 5.0, 0.40, 0.44, 0.50, 0.90)
-      draw_tick_set(ctx, row_top, band_height, plot_left, plot_width, window, row.major_tick_interval, 8.0, 0.72, 0.76, 0.82, 1.0, include_ends: true)
-      draw_tick_labels(ctx, row_top, band_height, plot_left, plot_width, window, row.major_tick_interval, anchor_time)
+      draw_tick_set(ctx, row_top, band_height, plot_left, plot_width, window_start, anchor_time, minor_ticks, MINOR_TICK_HEIGHT, 0.40, 0.44, 0.50, 0.90)
+      draw_tick_set(ctx, row_top, band_height, plot_left, plot_width, window_start, anchor_time, major_ticks, MAJOR_TICK_HEIGHT, 0.72, 0.76, 0.82, 1.0)
+      draw_tick_labels(ctx, row_top, band_height, plot_left, plot_width, window_start, anchor_time, labels)
     end
 
     private def draw_tick_labels(
@@ -132,25 +140,16 @@ module Ping
       band_height : Float64,
       plot_left : Float64,
       plot_width : Float64,
-      window : Time::Span,
-      interval : Time::Span,
-      anchor_time : Time,
+      window_start : Time,
+      window_end : Time,
+      labels : Array(Time),
     ) : Nil
-      count = (window.total_seconds / interval.total_seconds).round.to_i
-      return if count <= 0
-
       tick_y = row_top + band_height + 10.0
-      window_start = anchor_time - window
 
-      0.upto(count) do |index|
-        x = plot_left + plot_width * index.to_f64 / count
-        label_time = window_start + interval * index
-        label_x = if index == count
-                    x - 28.0
-                  else
-                    x + 2.0
-                  end
-        draw_text(ctx, tick_label(label_time), label_x, tick_y, 28.0, @tick_font, 0.66, 0.70, 0.76, 0.95)
+      labels.each do |label_time|
+        x = time_to_x(label_time, window_start, window_end, plot_left, plot_width)
+        label_x = (x - TICK_LABEL_WIDTH / 2.0).clamp(plot_left, plot_left + plot_width - TICK_LABEL_WIDTH)
+        draw_text(ctx, tick_label(label_time), label_x, tick_y, TICK_LABEL_WIDTH, @tick_font, 0.66, 0.70, 0.76, 0.95)
       end
     end
 
@@ -160,27 +159,74 @@ module Ping
       band_height : Float64,
       plot_left : Float64,
       plot_width : Float64,
-      window : Time::Span,
-      interval : Time::Span,
+      window_start : Time,
+      window_end : Time,
+      tick_times : Array(Time),
       tick_height : Float64,
       r : Float64,
       g : Float64,
       b : Float64,
       a : Float64,
-      include_ends : Bool = false,
     ) : Nil
-      count = (window.total_seconds / interval.total_seconds).round.to_i
-      return if count <= 1
-
       tick_y = row_top + band_height + 1.0
 
-      start_index = include_ends ? 0 : 1
-      end_index = include_ends ? count : count - 1
-
-      start_index.upto(end_index) do |index|
-        x = plot_left + plot_width * index.to_f64 / count
+      tick_times.each do |tick_time|
+        x = time_to_x(tick_time, window_start, window_end, plot_left, plot_width)
         fill_rect(ctx, x, tick_y, 1.0, tick_height, r, g, b, a)
       end
+    end
+
+    private def label_times(
+      window_start : Time,
+      window_end : Time,
+      major_ticks : Array(Time),
+    ) : Array(Time)
+      ticks = [] of Time
+      ticks << window_start
+      major_ticks.each do |tick_time|
+        ticks << tick_time unless ticks.last? == tick_time
+      end
+      ticks << window_end unless ticks.last? == window_end
+      ticks
+    end
+
+    private def aligned_tick_times(
+      window_start : Time,
+      window_end : Time,
+      interval : Time::Span,
+      tick_origin : Time,
+    ) : Array(Time)
+      return [] of Time if interval <= Time::Span.zero || window_end <= window_start
+
+      ticks = [] of Time
+
+      interval_seconds = interval.total_seconds
+      offset_seconds = (window_start - tick_origin).total_seconds
+      first_step = (offset_seconds / interval_seconds).ceil.to_i
+      tick_time = tick_origin + interval * first_step
+      tick_time += interval if tick_time <= window_start
+
+      while tick_time < window_end
+        ticks << tick_time
+        tick_time += interval
+      end
+
+      ticks
+    end
+
+    private def time_to_x(
+      time : Time,
+      window_start : Time,
+      window_end : Time,
+      plot_left : Float64,
+      plot_width : Float64,
+    ) : Float64
+      window_seconds = (window_end - window_start).total_seconds
+      return plot_left if window_seconds <= 0
+
+      elapsed_seconds = (time - window_start).total_seconds
+      fraction = (elapsed_seconds / window_seconds).clamp(0.0, 1.0)
+      plot_left + plot_width * fraction
     end
 
     private def fill_rect(
