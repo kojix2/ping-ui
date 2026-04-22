@@ -1,9 +1,9 @@
 module Ping
   class WeeklyChartRenderer
-    TICK_RESERVED      = 20.0
-    TICK_LABEL_WIDTH   = 40.0
-    MINOR_TICK_HEIGHT  = 5.0
-    MAJOR_TICK_HEIGHT  = 8.0
+    TICK_RESERVED     = 20.0
+    TICK_LABEL_WIDTH  = 40.0
+    MINOR_TICK_HEIGHT =  5.0
+    MAJOR_TICK_HEIGHT =  8.0
 
     def initialize(
       @settings : Settings,
@@ -19,6 +19,8 @@ module Ping
       params : UIng::Area::Draw::Params,
       current_host : String?,
       snapshot_at : Time,
+      end_date : Time,
+      display_days : Int32,
       range_start_hour : Int32,
       range_end_hour : Int32,
     ) : Nil
@@ -27,13 +29,13 @@ module Ping
       height = params.area_height
 
       fill_rect(ctx, 0.0, 0.0, width, height, 0.08, 0.10, 0.13)
-      draw_text(ctx, chart_title(current_host, snapshot_at, range_start_hour, range_end_hour), 16.0, 10.0, width - 32.0, @title_font, 0.93, 0.95, 0.98)
+      draw_text(ctx, chart_title(current_host, snapshot_at, end_date, display_days, range_start_hour, range_end_hour), 16.0, 10.0, width - 32.0, @title_font, 0.93, 0.95, 0.98)
 
       plot_left = 116.0
       padding = 8.0
       top = 28.0
       row_gap = 4.0
-      row_count = @window_days
+      row_count = display_days
       available_height = height - top - padding - row_gap * (row_count - 1)
       return if available_height <= 0
 
@@ -42,15 +44,16 @@ module Ping
       plot_width = width - plot_left - padding
       return if plot_width <= 0
 
-      day0_start = start_of_day(snapshot_at)
+      day0_start = start_of_day(end_date)
       window_span = (range_end_hour - range_start_hour).hours
       major_tick_interval, minor_tick_interval = tick_intervals_for(window_span)
+      selected_today = start_of_day(snapshot_at) == day0_start
 
-      @window_days.times do |index|
+      row_count.times do |index|
         row_top = top + index * (row_height + row_gap)
         day_start = day0_start - index.days
         anchor_time = day_start + range_end_hour.hours
-        row_end = index == 0 ? snapshot_at : anchor_time
+        row_end = index == 0 && selected_today ? snapshot_at : anchor_time
         fill_until = row_end > anchor_time ? anchor_time : row_end
         row = ChartRow.new(day_label(day_start), window_span, major_tick_interval, minor_tick_interval)
 
@@ -93,9 +96,9 @@ module Ping
       draw_text(ctx, row.label, 14.0, label_y, plot_left - 24.0, @label_font, 0.90, 0.92, 0.95)
     end
 
-    private def chart_title(current_host : String?, snapshot_at : Time, range_start_hour : Int32, range_end_hour : Int32) : String
+    private def chart_title(current_host : String?, snapshot_at : Time, end_date : Time, display_days : Int32, range_start_hour : Int32, range_end_hour : Int32) : String
       host = current_host || "no target"
-      "Weekly Dashboard  #{host}  #{hour_label(range_start_hour)}-#{hour_label(range_end_hour)}  Snapshot #{snapshot_at.to_s("%m/%d %H:%M")}"
+      "Weekly Dashboard  #{host}  End #{end_date.to_s("%Y-%m-%d")}  #{display_days}d  #{hour_label(range_start_hour)}-#{hour_label(range_end_hour)}  Snapshot #{snapshot_at.to_s("%m/%d %H:%M")}"
     end
 
     private def tick_intervals_for(window_span : Time::Span) : {Time::Span, Time::Span}

@@ -80,7 +80,7 @@ module Ping
         @tick_font,
         @title_font,
         WEEKLY_DASHBOARD_DAYS,
-        ->(host : String?) { history_snapshot_for(host) }
+        ->(host : String?, end_date : Time, display_days : Int32) { history_snapshot_for(host, end_date, display_days) }
       )
     end
 
@@ -434,20 +434,23 @@ module Ping
       append_console("failed to load history: #{ex.message}")
     end
 
-    private def weekly_history_since(reference : Time) : Time
-      start_of_day(reference) - (WEEKLY_DASHBOARD_DAYS - 1).days
+    private def weekly_history_since(reference : Time, days : Int32 = WEEKLY_DASHBOARD_DAYS) : Time
+      start_of_day(reference) - (days - 1).days
     end
 
-    private def history_snapshot_for(host : String?) : HistoryStore
+    private def history_snapshot_for(host : String?, end_date : Time, display_days : Int32) : HistoryStore
       return HistoryStore.new(@settings) unless host
 
-      return @history.snapshot if @current_host == host
+      if @current_host == host && start_of_day(Time.local) == start_of_day(end_date) && display_days == WEEKLY_DASHBOARD_DAYS
+        return @history.snapshot
+      end
 
       repo = repository
       return HistoryStore.new(@settings) unless repo
 
-      since = weekly_history_since(Time.local)
-      sessions, samples = repo.load_history(host, since)
+      since = weekly_history_since(end_date, display_days)
+      until_time = start_of_day(end_date) + 1.day
+      sessions, samples = repo.load_history(host, since, until_time)
       snapshot = HistoryStore.new(@settings)
       snapshot.replace(sessions, samples)
       snapshot

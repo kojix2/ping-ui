@@ -104,10 +104,10 @@ module Ping
       col_width = span_ms.to_f / n
       col_width = 1.0 if col_width < 1.0
 
-      relevant = @samples.select { |sample|
+      relevant = @samples.select do |sample|
         ms = sample.recorded_at.to_unix_ms
         ms >= from_ms && ms <= fill_until_ms
-      }
+      end
       samples_by_session = relevant.group_by(&.session_id)
       last_sample_ms_by_session = build_last_sample_ms_by_session(samples_by_session)
 

@@ -1,5 +1,7 @@
 module Ping
   class WeeklyDashboardWindow
+    DAY_OPTIONS = [3, 7, 14] of Int32
+
     WINDOW_WIDTH  = 720
     WINDOW_HEIGHT = 500
 
@@ -10,6 +12,8 @@ module Ping
     @snapshot_at : Time?
     @snapshot_host : String?
     @source_host : String?
+    @selected_end_date : Time
+    @display_days : Int32
     @range_start_hour : Int32
     @range_end_hour : Int32
 
@@ -19,7 +23,7 @@ module Ping
       @tick_font : UIng::FontDescriptor,
       @title_font : UIng::FontDescriptor,
       @window_days : Int32,
-      @history_loader : Proc(String?, HistoryStore),
+      @history_loader : Proc(String?, Time, Int32, HistoryStore),
     )
       @window = nil
       @area = nil
@@ -28,6 +32,8 @@ module Ping
       @snapshot_at = nil
       @snapshot_host = nil
       @source_host = nil
+      @selected_end_date = today
+      @display_days = @window_days
       @range_start_hour = 9
       @range_end_hour = 18
     end
@@ -52,8 +58,31 @@ module Ping
       host_label = UIng::Label.new(host_text(@source_host))
       @host_label = host_label
 
+      date_picker = UIng::DateTimePicker.new(:date)
+      date_picker.time = @selected_end_date
+
+      days_combo = UIng::Combobox.new(DAY_OPTIONS.map(&.to_s))
+      days_combo.selected = selected_day_index
+
       start_spinbox = UIng::Spinbox.new(0, 23, @range_start_hour)
       end_spinbox = UIng::Spinbox.new(1, 24, @range_end_hour)
+
+      date_picker.on_changed do |value|
+        normalized = clamp_end_date(value)
+        @selected_end_date = normalized
+        date_picker.time = normalized if start_of_day(value) != normalized
+        refresh_snapshot
+        @area.try(&.queue_redraw_all)
+      end
+
+      days_combo.on_selected do |index|
+        selected_days = DAY_OPTIONS[index]? || DAY_OPTIONS.last
+        next if selected_days == @display_days
+
+        @display_days = selected_days
+        refresh_snapshot
+        @area.try(&.queue_redraw_all)
+      end
 
       start_spinbox.on_changed do |value|
         if value >= @range_end_hour
@@ -75,6 +104,14 @@ module Ping
         apply_range_change
       end
 
+      today_button = UIng::Button.new("Today")
+      today_button.on_clicked do
+        @selected_end_date = today
+        date_picker.time = @selected_end_date
+        refresh_snapshot
+        @area.try(&.queue_redraw_all)
+      end
+
       refresh_button = UIng::Button.new("Refresh Snapshot")
       refresh_button.on_clicked do
         refresh_snapshot
@@ -83,10 +120,15 @@ module Ping
 
       toolbar = UIng::Box.new(:horizontal, padded: true)
       toolbar.append(host_label, stretchy: true)
+      toolbar.append(UIng::Label.new("End Date"))
+      toolbar.append(date_picker)
+      toolbar.append(UIng::Label.new("Days"))
+      toolbar.append(days_combo)
       toolbar.append(UIng::Label.new("Hours"))
       toolbar.append(start_spinbox)
       toolbar.append(UIng::Label.new("to"))
       toolbar.append(end_spinbox)
+      toolbar.append(today_button)
       toolbar.append(refresh_button)
 
       handler = UIng::Area::Handler.new
@@ -94,7 +136,7 @@ module Ping
         next unless renderer = @renderer
         next unless current_snapshot = @snapshot_at
 
-        renderer.draw(params, @snapshot_host, current_snapshot, @range_start_hour, @range_end_hour)
+        renderer.draw(params, @snapshot_host, current_snapshot, @selected_end_date, @display_days, @range_start_hour, @range_end_hour)
       end
       handler.mouse_event { |_, _| nil }
       handler.mouse_crossed { |_, _| nil }
@@ -141,7 +183,7 @@ module Ping
     private def refresh_snapshot : Nil
       snapshot_at = Time.local
       host = @source_host
-      snapshot_history = @history_loader.call(host)
+      snapshot_history = @history_loader.call(host, @selected_end_date, @display_days)
       @renderer = WeeklyChartRenderer.new(@settings, snapshot_history, @label_font, @tick_font, @title_font, @window_days)
       @snapshot_at = snapshot_at
       @snapshot_host = host
@@ -158,11 +200,33 @@ module Ping
 
     private def window_title(host : String?, snapshot_at : Time) : String
       target = host || "no target"
-      "Weekly Dashboard - #{target} - #{formatted_range} - #{snapshot_at.to_s("%m/%d %H:%M")}"
+      "Weekly Dashboard - #{target} - #{formatted_end_date} - #{@display_days}d - #{formatted_range} - #{snapshot_at.to_s("%m/%d %H:%M")}"
+    end
+
+    private def formatted_end_date : String
+      @selected_end_date.to_s("%Y-%m-%d")
     end
 
     private def formatted_range : String
       "#{hour_label(@range_start_hour)}-#{hour_label(@range_end_hour)}"
+    end
+
+    private def selected_day_index : Int32
+      DAY_OPTIONS.index(@display_days) || (DAY_OPTIONS.size - 1)
+    end
+
+    private def today : Time
+      start_of_day(Time.local)
+    end
+
+    private def clamp_end_date(value : Time) : Time
+      normalized = start_of_day(value)
+      max_date = today
+      normalized > max_date ? max_date : normalized
+    end
+
+    private def start_of_day(time : Time) : Time
+      Time.local(time.year, time.month, time.day)
     end
 
     private def host_text(host : String?) : String

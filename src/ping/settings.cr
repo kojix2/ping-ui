@@ -196,12 +196,12 @@ module Ping
 
     private def self.load_color(any : JSON::Any?) : {Float64, Float64, Float64}?
       ary = any.try(&.as_a?)
-      return nil unless ary && ary.size == 3
+      return unless ary && ary.size == 3
 
       r = ary[0]?.try(&.as_f?)
       g = ary[1]?.try(&.as_f?)
       b = ary[2]?.try(&.as_f?)
-      return nil unless r && g && b
+      return unless r && g && b
       {r, g, b}
     end
 
