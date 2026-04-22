@@ -40,10 +40,16 @@ bin/ping
 
 ## Storage
 
-- History database: ~/.config/ping-ui/history.sqlite3
-- Settings file: ~/.config/ping-ui/settings.json
-- If XDG_CONFIG_HOME is set, both files are stored under $XDG_CONFIG_HOME/ping-ui/
-- On Windows, both files are stored under %APPDATA%/ping-ui/ when APPDATA is available.
+- macOS:
+  Settings and history are stored under ~/Library/Application Support/ping-ui/
+- Linux:
+  Settings file: $XDG_CONFIG_HOME/ping-ui/settings.json or ~/.config/ping-ui/settings.json
+  History database: $XDG_STATE_HOME/ping-ui/history.sqlite3, then $XDG_DATA_HOME/ping-ui/history.sqlite3, then ~/.local/state/ping-ui/history.sqlite3
+- Windows:
+  Settings file: %APPDATA%/ping-ui/settings.json
+  History database: %LOCALAPPDATA%/ping-ui/history.sqlite3
+- You can override the history database path with PING_UI_DB_PATH.
+- Existing history databases in the legacy config location are migrated automatically when the new target path is first used.
 
 ## Data Handling
 

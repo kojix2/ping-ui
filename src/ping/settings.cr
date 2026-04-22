@@ -4,6 +4,11 @@ module Ping
   # Shared mutable settings for severity thresholds and chart colors.
   # severity levels: 0=ok, 1=warn, 2=alert, 3=critical
   class Settings
+    APP_NAME                = "ping-ui"
+    HISTORY_DB_FILENAME     = "history.sqlite3"
+    SETTINGS_FILENAME       = "settings.json"
+    HISTORY_DB_OVERRIDE_ENV = "PING_UI_DB_PATH"
+
     MIN_INTERVAL_MS     =  100
     MAX_INTERVAL_MS     = 5000
     DEFAULT_INTERVAL_MS = 1000
@@ -37,32 +42,62 @@ module Ping
     end
 
     def self.settings_path : String
-      File.join(config_dir, "settings.json")
+      File.join(config_dir, SETTINGS_FILENAME)
     end
 
     def self.history_db_path : String
-      File.join(config_dir, "history.sqlite3")
+      if override = ENV[HISTORY_DB_OVERRIDE_ENV]?
+        unless override.empty?
+          path = File.expand_path(override)
+          Dir.mkdir_p(File.dirname(path))
+          return path
+        end
+      end
+
+      path = File.join(history_dir, HISTORY_DB_FILENAME)
+      migrate_legacy_history_db(path)
+      path
     end
 
     def self.config_dir : String
       {% if flag?(:win32) %}
         app_data = ENV["APPDATA"]?
-        return File.join(app_data, "ping-ui") if app_data && !app_data.empty?
+        return File.join(app_data, APP_NAME) if app_data && !app_data.empty?
 
-        local_app_data = ENV["LOCALAPPDATA"]?
-        return File.join(local_app_data, "ping-ui") if local_app_data && !local_app_data.empty?
-
-        home = ENV["USERPROFILE"]? || "."
-        return File.join(home, "AppData", "Roaming", "ping-ui")
+        home = home_dir
+        return File.join(home, "AppData", "Roaming", APP_NAME)
+      {% elsif flag?(:darwin) %}
+        return File.join(home_dir, "Library", "Application Support", APP_NAME)
       {% end %}
 
       config_home = ENV["XDG_CONFIG_HOME"]?
       if config_home && !config_home.empty?
-        return File.join(config_home, "ping-ui")
+        return File.join(config_home, APP_NAME)
       end
 
-      home = ENV["HOME"]? || "."
-      File.join(home, ".config", "ping-ui")
+      File.join(home_dir, ".config", APP_NAME)
+    end
+
+    def self.history_dir : String
+      {% if flag?(:win32) %}
+        local_app_data = ENV["LOCALAPPDATA"]?
+        return File.join(local_app_data, APP_NAME) if local_app_data && !local_app_data.empty?
+
+        app_data = ENV["APPDATA"]?
+        return File.join(app_data, APP_NAME) if app_data && !app_data.empty?
+
+        return File.join(home_dir, "AppData", "Local", APP_NAME)
+      {% elsif flag?(:darwin) %}
+        return File.join(home_dir, "Library", "Application Support", APP_NAME)
+      {% end %}
+
+      state_home = ENV["XDG_STATE_HOME"]?
+      return File.join(state_home, APP_NAME) if state_home && !state_home.empty?
+
+      data_home = ENV["XDG_DATA_HOME"]?
+      return File.join(data_home, APP_NAME) if data_home && !data_home.empty?
+
+      File.join(home_dir, ".local", "state", APP_NAME)
     end
 
     def self.load : Settings
@@ -182,6 +217,52 @@ module Ping
         hosts << text
       end
       hosts.uniq.first(MAX_RECENT_HOSTS)
+    end
+
+    private def self.home_dir : String
+      {% if flag?(:win32) %}
+        ENV["USERPROFILE"]? || "."
+      {% else %}
+        ENV["HOME"]? || "."
+      {% end %}
+    end
+
+    private def self.legacy_history_db_path : String
+      File.join(legacy_config_dir, HISTORY_DB_FILENAME)
+    end
+
+    private def self.legacy_config_dir : String
+      {% if flag?(:win32) %}
+        app_data = ENV["APPDATA"]?
+        return File.join(app_data, APP_NAME) if app_data && !app_data.empty?
+
+        local_app_data = ENV["LOCALAPPDATA"]?
+        return File.join(local_app_data, APP_NAME) if local_app_data && !local_app_data.empty?
+
+        return File.join(home_dir, "AppData", "Roaming", APP_NAME)
+      {% end %}
+
+      config_home = ENV["XDG_CONFIG_HOME"]?
+      return File.join(config_home, APP_NAME) if config_home && !config_home.empty?
+
+      File.join(home_dir, ".config", APP_NAME)
+    end
+
+    private def self.migrate_legacy_history_db(target_path : String) : Nil
+      legacy_path = legacy_history_db_path
+      return if legacy_path == target_path
+      return unless File.exists?(legacy_path)
+      return if File.exists?(target_path)
+
+      Dir.mkdir_p(File.dirname(target_path))
+      begin
+        File.rename(legacy_path, target_path)
+      rescue
+        File.copy(legacy_path, target_path)
+        File.delete(legacy_path)
+      end
+    rescue
+      nil
     end
   end
 end
